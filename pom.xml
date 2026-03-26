@@ -59,11 +59,15 @@
                 <artifactId>javafx-maven-plugin</artifactId>
                 <version>0.0.8</version>
                 <configuration>
-                    <mainClass>com.library/com.library.Main</mainClass>
+                    <mainClass>com.library/com.library.AppLauncher</mainClass>
+                    <options>
+                        <option>--add-opens=javafx.fxml/javafx.fxml=ALL-UNNAMED</option>
+                        <option>--add-opens=java.base/java.lang.reflect=ALL-UNNAMED</option>
+                    </options>
                 </configuration>
             </plugin>
 
-            <!-- Compiler plugin — explicit Java 17 -->
+            <!-- Compiler plugin — explicit Java 25 -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>

@@ -1,11 +1,17 @@
 module com.library {
-    // JavaFX — підключимо на наступному кроці (зараз тільки консоль)
+    // JavaFX
     requires javafx.controls;
     requires javafx.fxml;
 
-    // PostgreSQL JDBC driver
+    // Java SQL
     requires java.sql;
 
-    //.env
+    // dotenv (Step 2)
     requires io.github.cdimascio.dotenv.java;
+
+    // Allow FXMLLoader to access controller classes via reflection
+    opens com.library               to javafx.fxml;
+    opens com.library.controller    to javafx.fxml;
+
+    exports com.library;
 }

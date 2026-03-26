@@ -1,6 +1,16 @@
 package com.library;
 
+import javafx.application.Application;
+
+/**
+ * Entry point wrapper.
+ */
+
+
 public class AppLauncher {
-    // stub — will be implemented later
+
+    public static void main(String[] args) {
+        Application.launch(LibraryApp.class, args);
+    }
 }
 

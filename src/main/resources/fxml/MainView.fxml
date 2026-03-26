@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<BorderPane xmlns="http://javafx.com/javafx"
+            xmlns:fx="http://javafx.com/fxml"
+            fx:controller="com.library.controller.MainController">
+
+    <!-- ── Top bar ─────────────────────────────────────────────── -->
+    <top>
+        <HBox styleClass="top-bar" spacing="12" alignment="CENTER_LEFT">
+            <Label text="Library Management System" styleClass="app-title"/>
+        </HBox>
+    </top>
+
+    <!-- ── Centre placeholder ──────────────────────────────────── -->
+    <center>
+        <VBox alignment="CENTER" spacing="16">
+            <Label text="Books table will appear here"
+                   styleClass="placeholder-text"/>
+        </VBox>
+    </center>
+
+    <!-- ── Status bar ──────────────────────────────────────────── -->
+    <bottom>
+        <HBox styleClass="status-bar" alignment="CENTER_LEFT" spacing="8">
+            <Label fx:id="statusLabel" styleClass="status-label"/>
+        </HBox>
+    </bottom>
+
+</BorderPane>
