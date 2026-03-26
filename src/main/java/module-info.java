@@ -5,4 +5,7 @@ module com.library {
 
     // PostgreSQL JDBC driver
     requires java.sql;
+
+    //.env
+    requires io.github.cdimascio.dotenv.java;
 }
