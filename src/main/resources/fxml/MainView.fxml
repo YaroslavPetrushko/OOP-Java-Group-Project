@@ -10,143 +10,16 @@
     <!-- ── Top bar ─────────────────────────────────────────────── -->
     <top>
         <HBox styleClass="top-bar" spacing="12" alignment="CENTER_LEFT">
-            <Label text="📚 Library Management System" styleClass="app-title"/>
+            <Label text="Library Management System" styleClass="app-title"/>
         </HBox>
     </top>
 
-    <!-- ── Centre: TabPane ─────────────────────────────────────── -->
+    <!-- ── Centre placeholder ──────────────────────────────────── -->
     <center>
-        <TabPane fx:id="tabPane"
-                 tabClosingPolicy="UNAVAILABLE"
-                 styleClass="main-tab-pane">
-
-            <!-- ════ Books ════ -->
-            <Tab text="Books" fx:id="booksTab">
-                <VBox styleClass="tab-content">
-
-                    <HBox styleClass="toolbar" spacing="8" alignment="CENTER_LEFT">
-                        <Button text="＋ Add"    styleClass="btn-primary"   onAction="#onAddBook"/>
-                        <Button text="✎ Edit"   styleClass="btn-secondary" onAction="#onEditBook"/>
-                        <Button text="✕ Delete" styleClass="btn-danger"    onAction="#onDeleteBook"/>
-                        <Region HBox.hgrow="ALWAYS"/>
-                        <TextField fx:id="bookSearchField"
-                                   promptText="Search books…"
-                                   styleClass="search-field"
-                                   prefWidth="220"/>
-                    </HBox>
-
-                    <TableView fx:id="booksTable" VBox.vgrow="ALWAYS" styleClass="data-table">
-                        <columns>
-                            <TableColumn fx:id="bookIdCol"     text="ID"      prefWidth="50"  minWidth="40"/>
-                            <TableColumn fx:id="bookTitleCol"  text="Title"   prefWidth="240" minWidth="120"/>
-                            <TableColumn fx:id="bookAuthorCol" text="Author"  prefWidth="180" minWidth="100"/>
-                            <TableColumn fx:id="bookGenreCol"  text="Genre"   prefWidth="120" minWidth="80"/>
-                            <TableColumn fx:id="bookIsbnCol"   text="ISBN"    prefWidth="150" minWidth="100"/>
-                            <TableColumn fx:id="bookYearCol"   text="Year"    prefWidth="70"  minWidth="50"/>
-                            <TableColumn fx:id="bookCopiesCol" text="Copies"  prefWidth="70"  minWidth="50"/>
-                        </columns>
-                        <placeholder>
-                            <Label text="No books found." styleClass="placeholder-text"/>
-                        </placeholder>
-                    </TableView>
-
-                </VBox>
-            </Tab>
-
-            <!-- ════ Authors ════ -->
-            <Tab text="Authors" fx:id="authorsTab">
-                <VBox styleClass="tab-content">
-
-                    <HBox styleClass="toolbar" spacing="8" alignment="CENTER_LEFT">
-                        <Button text="＋ Add"    styleClass="btn-primary"   onAction="#onAddAuthor"/>
-                        <Button text="✎ Edit"   styleClass="btn-secondary" onAction="#onEditAuthor"/>
-                        <Button text="✕ Delete" styleClass="btn-danger"    onAction="#onDeleteAuthor"/>
-                        <Region HBox.hgrow="ALWAYS"/>
-                        <TextField fx:id="authorSearchField"
-                                   promptText="Search authors…"
-                                   styleClass="search-field"
-                                   prefWidth="220"/>
-                    </HBox>
-
-                    <TableView fx:id="authorsTable" VBox.vgrow="ALWAYS" styleClass="data-table">
-                        <columns>
-                            <TableColumn fx:id="authorIdCol"        text="ID"         prefWidth="50"  minWidth="40"/>
-                            <TableColumn fx:id="authorNameCol"      text="Full Name"  prefWidth="220" minWidth="120"/>
-                            <TableColumn fx:id="authorCountryCol"   text="Country"    prefWidth="150" minWidth="80"/>
-                            <TableColumn fx:id="authorBirthYearCol" text="Birth Year" prefWidth="100" minWidth="70"/>
-                        </columns>
-                        <placeholder>
-                            <Label text="No authors found." styleClass="placeholder-text"/>
-                        </placeholder>
-                    </TableView>
-
-                </VBox>
-            </Tab>
-
-            <!-- ════ Readers ════ -->
-            <Tab text="Readers" fx:id="readersTab">
-                <VBox styleClass="tab-content">
-
-                    <HBox styleClass="toolbar" spacing="8" alignment="CENTER_LEFT">
-                        <Button text="＋ Add"    styleClass="btn-primary"   onAction="#onAddReader"/>
-                        <Button text="✎ Edit"   styleClass="btn-secondary" onAction="#onEditReader"/>
-                        <Button text="✕ Delete" styleClass="btn-danger"    onAction="#onDeleteReader"/>
-                        <Region HBox.hgrow="ALWAYS"/>
-                        <TextField fx:id="readerSearchField"
-                                   promptText="Search readers…"
-                                   styleClass="search-field"
-                                   prefWidth="220"/>
-                    </HBox>
-
-                    <TableView fx:id="readersTable" VBox.vgrow="ALWAYS" styleClass="data-table">
-                        <columns>
-                            <TableColumn fx:id="readerIdCol"      text="ID"         prefWidth="50"  minWidth="40"/>
-                            <TableColumn fx:id="readerNameCol"    text="Full Name"  prefWidth="190" minWidth="120"/>
-                            <TableColumn fx:id="readerEmailCol"   text="Email"      prefWidth="190" minWidth="120"/>
-                            <TableColumn fx:id="readerPhoneCol"   text="Phone"      prefWidth="130" minWidth="90"/>
-                            <TableColumn fx:id="readerRegDateCol" text="Registered" prefWidth="110" minWidth="80"/>
-                        </columns>
-                        <placeholder>
-                            <Label text="No readers found." styleClass="placeholder-text"/>
-                        </placeholder>
-                    </TableView>
-
-                </VBox>
-            </Tab>
-
-            <!-- ════ Loans ════ -->
-            <Tab text="Loans" fx:id="loansTab">
-                <VBox styleClass="tab-content">
-
-                    <HBox styleClass="toolbar" spacing="8" alignment="CENTER_LEFT">
-                        <Button text="＋ Add"    styleClass="btn-primary"   onAction="#onAddLoan"/>
-                        <Button text="✎ Edit"   styleClass="btn-secondary" onAction="#onEditLoan"/>
-                        <Button text="✕ Delete" styleClass="btn-danger"    onAction="#onDeleteLoan"/>
-                        <Region HBox.hgrow="ALWAYS"/>
-                        <TextField fx:id="loanSearchField"
-                                   promptText="Search loans…"
-                                   styleClass="search-field"
-                                   prefWidth="220"/>
-                    </HBox>
-
-                    <TableView fx:id="loansTable" VBox.vgrow="ALWAYS" styleClass="data-table">
-                        <columns>
-                            <TableColumn fx:id="loanIdCol"     text="ID"        prefWidth="50"  minWidth="40"/>
-                            <TableColumn fx:id="loanBookCol"   text="Book"      prefWidth="220" minWidth="120"/>
-                            <TableColumn fx:id="loanReaderCol" text="Reader"    prefWidth="180" minWidth="100"/>
-                            <TableColumn fx:id="loanDateCol"   text="Loan Date" prefWidth="110" minWidth="80"/>
-                            <TableColumn fx:id="loanDueCol"    text="Due Date"  prefWidth="110" minWidth="80"/>
-                            <TableColumn fx:id="loanStatusCol" text="Status"    prefWidth="90"  minWidth="70"/>
-                        </columns>
-                        <placeholder>
-                            <Label text="No loans found." styleClass="placeholder-text"/>
-                        </placeholder>
-                    </TableView>
-
-                </VBox>
-            </Tab>
-
-        </TabPane>
+        <VBox alignment="CENTER" spacing="16">
+            <Label text="Books table will appear here"
+                   styleClass="placeholder-text"/>
+        </VBox>
     </center>
 
     <!-- ── Status bar ──────────────────────────────────────────── -->
