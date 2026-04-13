@@ -41,7 +41,7 @@ public class BookDaoImpl implements BookDao {
                 rs.getString("author_name"),
                 rs.getString("genre"),
                 rs.getString("isbn"),
-                rs.getObject("pub_year", Integer.class),   // дозволяє NULL
+                rs.getInt("pub_year"),   // дозволяє NULL
                 rs.getInt("copies")
         );
     }

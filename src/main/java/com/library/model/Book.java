@@ -9,7 +9,7 @@ public class Book {
     private String authorName;   // для відображення в таблиці
     private String genre;
     private String isbn;
-    private Integer pubYear;     // ← Змінено з int на Integer (nullable)
+    private int pubYear;
     private int copies;
 
     // Constructors
@@ -46,8 +46,8 @@ public class Book {
     public String getIsbn() { return isbn; }
     public void setIsbn(String isbn) { this.isbn = isbn; }
 
-    public Integer getPubYear() { return pubYear; }           // ← Integer
-    public void setPubYear(Integer pubYear) { this.pubYear = pubYear; }
+    public int getPubYear() { return pubYear; }
+    public void setPubYear(int pubYear) { this.pubYear = pubYear; }
 
     public int getCopies() { return copies; }
     public void setCopies(int copies) { this.copies = copies; }
