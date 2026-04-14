@@ -185,4 +185,23 @@ public class MainController {
     @FXML private void onAddLoan()    { /* Step 6 */ }
     @FXML private void onEditLoan()   { /* Step 6 */ }
     @FXML private void onDeleteLoan() { /* Step 6 */ }
+
+    // ════════════════════════════════════════════════════════════
+    //  Utilities
+    // ════════════════════════════════════════════════════════════
+    private void setStatus(String msg) { statusLabel.setText(msg); }
+
+    private void showAlert(Alert.AlertType type, String title, String msg) {
+        Alert a = new Alert(type);
+        a.setTitle(title);
+        a.setHeaderText(null);
+        a.setContentText(msg);
+        a.showAndWait();
+    }
+    
+    private static String str(int v)          { return v == 0 ? "" : String.valueOf(v); }
+    private static int    parseIntOrZero(String s) {
+        try { return Integer.parseInt(s.trim()); } catch (NumberFormatException e) { return 0; }
+    }
+    private static String coalesce(String s)  { return (s == null || s.isBlank()) ? null : s.trim(); }
 }
