@@ -1,9 +1,15 @@
 package com.library.controller;
 
+import com.library.dao.BookDao;
+import com.library.dao.impl.BookDaoImpl;
 import com.library.model.Author;
 import com.library.model.Book;
 import com.library.model.Loan;
 import com.library.model.Reader;
+import javafx.beans.property.SimpleIntegerProperty;
+import javafx.beans.property.SimpleStringProperty;
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.scene.control.*;
 
@@ -12,10 +18,12 @@ import java.time.LocalDate;
 /**
  * Controller for MainView.fxml.
  *
- * Step 4 — UI shell: all @FXML fields declared, action stubs in place.
- * Step 5 — will add: cellValueFactory wiring, ObservableList, DAO calls.
+ * Step 5 — Books CRUD
  */
 public class MainController {
+
+    // ── DAOs ─────────────────────────────────────────────────────
+    private final BookDao   bookDao   = new BookDaoImpl();
 
     // ── Status bar ─────────────────────────────────────────────
     @FXML private Label statusLabel;
@@ -30,6 +38,8 @@ public class MainController {
     @FXML private TableColumn<Book, Integer> bookYearCol;
     @FXML private TableColumn<Book, Integer> bookCopiesCol;
     @FXML private TextField                  bookSearchField;
+
+    private final ObservableList<Book> booksData = FXCollections.observableArrayList();
 
     // ── Authors ─────────────────────────────────────────────────
     @FXML private TableView<Author>            authorsTable;
@@ -61,14 +71,67 @@ public class MainController {
     // ── Init ────────────────────────────────────────────────────
     @FXML
     public void initialize() {
-        statusLabel.setText("Connected to database   |  Step 4: UI ready");
+        setupBooksTable();
+        loadBooks();
+        setupBookSearch();
+        statusLabel.setText("Connected to database  |  Step 5: Books CRUD");
         // Step 5: wire cellValueFactory + load data from DAO
     }
 
+    // Books - Setup
+    private void setupBooksTable() {
+        bookIdCol    .setCellValueFactory(d -> new SimpleIntegerProperty(d.getValue().getId()).asObject());
+        bookTitleCol .setCellValueFactory(d -> new SimpleStringProperty(d.getValue().getTitle()));
+        bookAuthorCol.setCellValueFactory(d -> new SimpleStringProperty(d.getValue().getAuthorName()));
+        bookGenreCol .setCellValueFactory(d -> new SimpleStringProperty(d.getValue().getGenre()));
+        bookIsbnCol  .setCellValueFactory(d -> new SimpleStringProperty(d.getValue().getIsbn()));
+        bookYearCol  .setCellValueFactory(d -> new SimpleIntegerProperty(d.getValue().getPubYear()).asObject());
+        bookCopiesCol.setCellValueFactory(d -> new SimpleIntegerProperty(d.getValue().getCopies()).asObject());
+
+        booksTable.setItems(booksData);
+    }
+
+    private void loadBooks() {
+        booksData.setAll(bookDao.findAll());
+    }
+
+    private void setupBookSearch() {
+        bookSearchField.textProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal == null || newVal.isBlank()) {
+                booksData.setAll(bookDao.findAll());
+            } else {
+                booksData.setAll(bookDao.findByTitle(newVal.trim()));
+            }
+        });
+    }
+
     // ── Book actions ────────────────────────────────────────────
-    @FXML private void onAddBook()    { /* Step 5 */ }
-    @FXML private void onEditBook()   { /* Step 5 */ }
-    @FXML private void onDeleteBook() { /* Step 5 */ }
+    @FXML private void onAddBook()    {
+//        showDialog.ifPresent(book -> {
+//            bookDao.insert(book);
+//            loadBooks();
+//            setStatus("Book added.");
+//        });
+    }
+    @FXML private void onEditBook()   {
+//        Book selected = booksTable.getSelectedItem();
+//        showBookDialog(selected).ifPresent(updated -> {
+//            bookDao.update(updated);
+//            loadBooks();
+//            setStatus("Book updated.");
+//        });
+    }
+    @FXML private void onDeleteBook() {
+//        Book selected = booksTable.getSelectedItem();
+//
+//        Alert "Delete?"
+//
+//            if (yes) {
+//                bookDao.delete(selected.getId());
+//                loadBooks();
+//                setStatus("Book deleted.");
+//            }
+    }
 
     // ── Author actions ──────────────────────────────────────────
     @FXML private void onAddAuthor()    { /* Step 6 */ }
