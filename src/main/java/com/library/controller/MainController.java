@@ -1,6 +1,8 @@
 package com.library.controller;
 
+import com.library.dao.AuthorDao;
 import com.library.dao.BookDao;
+import com.library.dao.impl.AuthorDaoImpl;
 import com.library.dao.impl.BookDaoImpl;
 import com.library.model.Author;
 import com.library.model.Book;
@@ -14,6 +16,7 @@ import javafx.fxml.FXML;
 import javafx.scene.control.*;
 
 import java.time.LocalDate;
+import java.util.Optional;
 
 /**
  * Controller for MainView.fxml.
@@ -24,6 +27,7 @@ public class MainController {
 
     // ── DAOs ─────────────────────────────────────────────────────
     private final BookDao   bookDao   = new BookDaoImpl();
+    private final AuthorDao authorDao = new AuthorDaoImpl();
 
     // ── Status bar ─────────────────────────────────────────────
     @FXML private Label statusLabel;
@@ -131,6 +135,40 @@ public class MainController {
 //                loadBooks();
 //                setStatus("Book deleted.");
 //            }
+    }
+
+    // ════════════════════════════════════════════════════════════
+    //  Books — Add / Edit dialog
+    // ════════════════════════════════════════════════════════════
+    private Optional<Book> showBookDialog(Book existing) {
+        boolean isEdit = existing != null;
+
+        Dialog<Book> dialog = new Dialog<>();
+        dialog.setTitle(isEdit ? "Edit Book" : "Add Book");
+        dialog.setHeaderText(null);
+        dialog.getDialogPane().getButtonTypes()
+                .addAll(ButtonType.OK, ButtonType.CANCEL);
+
+        // ── Form ─────────────────────────────────────────────────
+
+        //setTitle
+        //setGenre
+        //setIsbn
+        //setPubYear
+        //setCopies
+
+
+        return dialog.showAndWait();
+    }
+
+    // ── Dialog validation ─────────────────────────────────────────
+    private String validateBookForm() {
+        StringBuilder sb = new StringBuilder();
+
+        // if field isBlank / isNull
+        // show message
+
+        return sb.toString();
     }
 
     // ── Author actions ──────────────────────────────────────────
