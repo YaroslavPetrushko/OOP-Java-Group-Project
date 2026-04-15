@@ -26,74 +26,81 @@ import java.util.Optional;
 /**
  * Controller for MainView.fxml.
  *
- * Step 5 — Books CRUD
+ * Step 5 — Books CRUD fully wired:
+ *   cellValueFactory (lambda), ObservableList, live search,
+ *   Add / Edit / Delete with inline dialog.
+ * Step 6 — Authors, Readers, Loans stubs (onAction handlers present).
  */
 public class MainController {
 
     // ── DAOs ─────────────────────────────────────────────────────
-    private final BookDao   bookDao   = new BookDaoImpl();
-    private final AuthorDao authorDao = new AuthorDaoImpl();
+    private final BookDao   bookDao     = new BookDaoImpl();
+    private final AuthorDao authorDao   = new AuthorDaoImpl();
 
-    // ── Status bar ─────────────────────────────────────────────
+    // ── Status bar ────────────────────────────────────────────────
     @FXML private Label statusLabel;
 
-    // ── Books ───────────────────────────────────────────────────
-    @FXML private TableView<Book>            booksTable;
-    @FXML private TableColumn<Book, Integer> bookIdCol;
-    @FXML private TableColumn<Book, String>  bookTitleCol;
-    @FXML private TableColumn<Book, String>  bookAuthorCol;
-    @FXML private TableColumn<Book, String>  bookGenreCol;
-    @FXML private TableColumn<Book, String>  bookIsbnCol;
-    @FXML private TableColumn<Book, Integer> bookYearCol;
-    @FXML private TableColumn<Book, Integer> bookCopiesCol;
-    @FXML private TextField                  bookSearchField;
+    // ── Books ─────────────────────────────────────────────────────
+    @FXML private TableView<Book>               booksTable;
+    @FXML private TableColumn<Book, Integer>    bookIdCol;
+    @FXML private TableColumn<Book, String>     bookTitleCol;
+    @FXML private TableColumn<Book, String>     bookAuthorCol;
+    @FXML private TableColumn<Book, String>     bookGenreCol;
+    @FXML private TableColumn<Book, String>     bookIsbnCol;
+    @FXML private TableColumn<Book, Integer>    bookYearCol;
+    @FXML private TableColumn<Book, Integer>    bookCopiesCol;
+    @FXML private TextField                     bookSearchField;
 
     private final ObservableList<Book> booksData = FXCollections.observableArrayList();
 
-    // ── Authors ─────────────────────────────────────────────────
-    @FXML private TableView<Author>            authorsTable;
-    @FXML private TableColumn<Author, Integer> authorIdCol;
-    @FXML private TableColumn<Author, String>  authorNameCol;
-    @FXML private TableColumn<Author, String>  authorCountryCol;
-    @FXML private TableColumn<Author, Integer> authorBirthYearCol;
-    @FXML private TextField                    authorSearchField;
+    // ── Authors (Step 6) ──────────────────────────────────────────
+    @FXML private TableView<Author>             authorsTable;
+    @FXML private TableColumn<Author, Integer>  authorIdCol;
+    @FXML private TableColumn<Author, String>   authorNameCol;
+    @FXML private TableColumn<Author, String>   authorCountryCol;
+    @FXML private TableColumn<Author, Integer>  authorBirthYearCol;
+    @FXML private TextField                     authorSearchField;
 
-    // ── Readers ─────────────────────────────────────────────────
-    @FXML private TableView<Reader>             readersTable;
-    @FXML private TableColumn<Reader, Integer>  readerIdCol;
-    @FXML private TableColumn<Reader, String>   readerNameCol;
-    @FXML private TableColumn<Reader, String>   readerEmailCol;
-    @FXML private TableColumn<Reader, String>   readerPhoneCol;
-    @FXML private TableColumn<Reader, LocalDate> readerRegDateCol;
-    @FXML private TextField                      readerSearchField;
+    // ── Readers (Step 6) ──────────────────────────────────────────
+    @FXML private TableView<Reader>                 readersTable;
+    @FXML private TableColumn<Reader, Integer>      readerIdCol;
+    @FXML private TableColumn<Reader, String>       readerNameCol;
+    @FXML private TableColumn<Reader, String>       readerEmailCol;
+    @FXML private TableColumn<Reader, String>       readerPhoneCol;
+    @FXML private TableColumn<Reader, LocalDate>    readerRegDateCol;
+    @FXML private TextField                         readerSearchField;
 
-    // ── Loans ───────────────────────────────────────────────────
-    @FXML private TableView<Loan>             loansTable;
-    @FXML private TableColumn<Loan, Integer>  loanIdCol;
-    @FXML private TableColumn<Loan, String>   loanBookCol;
-    @FXML private TableColumn<Loan, String>   loanReaderCol;
-    @FXML private TableColumn<Loan, LocalDate> loanDateCol;
-    @FXML private TableColumn<Loan, LocalDate> loanDueCol;
-    @FXML private TableColumn<Loan, String>   loanStatusCol;
-    @FXML private TextField                   loanSearchField;
+    // ── Loans (Step 6) ────────────────────────────────────────────
+    @FXML private TableView<Loan>               loansTable;
+    @FXML private TableColumn<Loan, Integer>    loanIdCol;
+    @FXML private TableColumn<Loan, String>     loanBookCol;
+    @FXML private TableColumn<Loan, String>     loanReaderCol;
+    @FXML private TableColumn<Loan, LocalDate>  loanDateCol;
+    @FXML private TableColumn<Loan, LocalDate>  loanDueCol;
+    @FXML private TableColumn<Loan, String>     loanStatusCol;
+    @FXML private TextField                     loanSearchField;
 
-    // ── Init ────────────────────────────────────────────────────
+    // ════════════════════════════════════════════════════════════
+    //  Init
+    // ════════════════════════════════════════════════════════════
     @FXML
     public void initialize() {
         setupBooksTable();
         loadBooks();
         setupBookSearch();
-        statusLabel.setText("Connected to database  |  Step 5: Books CRUD");
-        // Step 5: wire cellValueFactory + load data from DAO
+        setStatus("Connected ✅  |  Books CRUD ready");
     }
 
-    // Books - Setup
+    // ════════════════════════════════════════════════════════════
+    //  Books — setup
+    // ════════════════════════════════════════════════════════════
     private void setupBooksTable() {
+        // Lambda-based CVF — no reflection, no module-info changes needed
         bookIdCol    .setCellValueFactory(d -> new SimpleIntegerProperty(d.getValue().getId()).asObject());
-        bookTitleCol .setCellValueFactory(d -> new SimpleStringProperty(d.getValue().getTitle()));
-        bookAuthorCol.setCellValueFactory(d -> new SimpleStringProperty(d.getValue().getAuthorName()));
-        bookGenreCol .setCellValueFactory(d -> new SimpleStringProperty(d.getValue().getGenre()));
-        bookIsbnCol  .setCellValueFactory(d -> new SimpleStringProperty(d.getValue().getIsbn()));
+        bookTitleCol .setCellValueFactory(d  -> new SimpleStringProperty(d.getValue().getTitle()));
+        bookAuthorCol.setCellValueFactory(d  -> new SimpleStringProperty(d.getValue().getAuthorName()));
+        bookGenreCol .setCellValueFactory(d  -> new SimpleStringProperty(d.getValue().getGenre()));
+        bookIsbnCol  .setCellValueFactory(d  -> new SimpleStringProperty(d.getValue().getIsbn()));
         bookYearCol  .setCellValueFactory(d -> new SimpleIntegerProperty(d.getValue().getPubYear()).asObject());
         bookCopiesCol.setCellValueFactory(d -> new SimpleIntegerProperty(d.getValue().getCopies()).asObject());
 
@@ -114,37 +121,64 @@ public class MainController {
         });
     }
 
-    // ── Book actions ────────────────────────────────────────────
-    @FXML private void onAddBook()    {
-//        showDialog.ifPresent(book -> {
-//            bookDao.insert(book);
-//            loadBooks();
-//            setStatus("Book added.");
-//        });
+    // ════════════════════════════════════════════════════════════
+    //  Books — CRUD actions
+    // ════════════════════════════════════════════════════════════
+    @FXML
+    private void onAddBook() {
+        showBookDialog(null).ifPresent(book -> {
+            bookDao.insert(book);
+            loadBooks();
+            setStatus("Book \"" + book.getTitle() + "\" added.");
+        });
     }
-    @FXML private void onEditBook()   {
-//        Book selected = booksTable.getSelectedItem();
-//        showBookDialog(selected).ifPresent(updated -> {
-//            bookDao.update(updated);
-//            loadBooks();
-//            setStatus("Book updated.");
-//        });
+
+    @FXML
+    private void onEditBook() {
+        Book selected = booksTable.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            showAlert(Alert.AlertType.WARNING, "No selection",
+                    "Please select a book to edit.");
+            return;
+        }
+        showBookDialog(selected).ifPresent(updated -> {
+            updated.setId(selected.getId());
+            bookDao.update(updated);
+            loadBooks();
+            setStatus("Book \"" + updated.getTitle() + "\" updated.");
+        });
     }
-    @FXML private void onDeleteBook() {
-//        Book selected = booksTable.getSelectedItem();
-//
-//        Alert "Delete?"
-//
-//            if (yes) {
-//                bookDao.delete(selected.getId());
-//                loadBooks();
-//                setStatus("Book deleted.");
-//            }
+
+    @FXML
+    private void onDeleteBook() {
+        Book selected = booksTable.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            showAlert(Alert.AlertType.WARNING, "No selection",
+                    "Please select a book to delete.");
+            return;
+        }
+
+        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION,
+                "Delete \"" + selected.getTitle() + "\"?\nThis action cannot be undone.",
+                ButtonType.YES, ButtonType.NO);
+        confirm.setTitle("Confirm deletion");
+        confirm.setHeaderText(null);
+
+        confirm.showAndWait().ifPresent(btn -> {
+            if (btn == ButtonType.YES) {
+                bookDao.delete(selected.getId());
+                loadBooks();
+                setStatus("Book deleted.");
+            }
+        });
     }
 
     // ════════════════════════════════════════════════════════════
     //  Books — Add / Edit dialog
     // ════════════════════════════════════════════════════════════
+    /**
+     * @param existing null → Add mode; non-null → Edit mode (pre-fills fields)
+     */
     private Optional<Book> showBookDialog(Book existing) {
         boolean isEdit = existing != null;
 
@@ -163,8 +197,8 @@ public class MainController {
         TextField titleField  = field(isEdit ? existing.getTitle()              : "", "Book title *");
         TextField genreField  = field(isEdit ? existing.getGenre()              : "", "Genre");
         TextField isbnField   = field(isEdit ? existing.getIsbn()               : "", "ISBN");
-        TextField yearField   = field(isEdit ? str(existing.getPubYear())        : "", "e.g. 2024");
-        TextField copiesField = field(isEdit ? str(existing.getCopies())         : "1", "≥ 1");
+        TextField yearField   = field(isEdit ? str(existing.getPubYear())       : "", "e.g. 2024");
+        TextField copiesField = field(isEdit ? str(existing.getCopies())        : "1", "≥ 1");
 
         // Author dropdown
         List<Author> authors = authorDao.findAll();
@@ -227,27 +261,30 @@ public class MainController {
                                     TextField yearField,
                                     TextField copiesField) {
         StringBuilder sb = new StringBuilder();
-
         if (titleField.getText().isBlank())
-            sb.append("Title is required.");
-        // if field isBlank / isNull
-        // show message
-        // add compare for year, copies
-
+            sb.append("• Title is required.\n");
+        if (authorBox.getValue() == null)
+            sb.append("• Author is required.\n");
+        String yr = yearField.getText().trim();
+        if (!yr.isEmpty() && !yr.matches("\\d{1,4}"))
+            sb.append("• Year must be a 1–4 digit number.\n");
+        String cp = copiesField.getText().trim();
+        if (!cp.isEmpty() && !cp.matches("\\d+"))
+            sb.append("• Copies must be a positive integer.\n");
         return sb.toString();
     }
 
-    // ── Author actions ──────────────────────────────────────────
+    // ════════════════════════════════════════════════════════════
+    //  Stubs — Authors / Readers / Loans (Step 6)
+    // ════════════════════════════════════════════════════════════
     @FXML private void onAddAuthor()    { /* Step 6 */ }
     @FXML private void onEditAuthor()   { /* Step 6 */ }
     @FXML private void onDeleteAuthor() { /* Step 6 */ }
 
-    // ── Reader actions ──────────────────────────────────────────
     @FXML private void onAddReader()    { /* Step 6 */ }
     @FXML private void onEditReader()   { /* Step 6 */ }
     @FXML private void onDeleteReader() { /* Step 6 */ }
 
-    // ── Loan actions ────────────────────────────────────────────
     @FXML private void onAddLoan()    { /* Step 6 */ }
     @FXML private void onEditLoan()   { /* Step 6 */ }
     @FXML private void onDeleteLoan() { /* Step 6 */ }
