@@ -12,10 +12,15 @@ import javafx.beans.property.SimpleIntegerProperty;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
+import javafx.geometry.Insets;
 import javafx.scene.control.*;
+import javafx.scene.layout.GridPane;
+import javafx.util.StringConverter;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -150,23 +155,84 @@ public class MainController {
                 .addAll(ButtonType.OK, ButtonType.CANCEL);
 
         // ── Form ─────────────────────────────────────────────────
+        GridPane grid = new GridPane();
+        grid.setHgap(12);
+        grid.setVgap(10);
+        grid.setPadding(new Insets(18, 24, 8, 24));
 
-        //setTitle
-        //setGenre
-        //setIsbn
-        //setPubYear
-        //setCopies
+        TextField titleField  = field(isEdit ? existing.getTitle()              : "", "Book title *");
+        TextField genreField  = field(isEdit ? existing.getGenre()              : "", "Genre");
+        TextField isbnField   = field(isEdit ? existing.getIsbn()               : "", "ISBN");
+        TextField yearField   = field(isEdit ? str(existing.getPubYear())        : "", "e.g. 2024");
+        TextField copiesField = field(isEdit ? str(existing.getCopies())         : "1", "≥ 1");
 
+        // Author dropdown
+        List<Author> authors = authorDao.findAll();
+        ComboBox<Author> authorBox = new ComboBox<>(
+                FXCollections.observableArrayList(authors));
+        authorBox.setConverter(new StringConverter<>() {
+            @Override public String toString(Author a)   { return a == null ? "" : a.getFullName(); }
+            @Override public Author fromString(String s) { return null; }
+        });
+        authorBox.setPromptText("Select author *");
+        authorBox.setPrefWidth(220);
+        if (isEdit) {
+            authors.stream()
+                    .filter(a -> a.getId() == existing.getAuthorId())
+                    .findFirst()
+                    .ifPresent(authorBox::setValue);
+        }
+
+        grid.add(label("Title *"),   0, 0); grid.add(titleField,  1, 0);
+        grid.add(label("Author *"),  0, 1); grid.add(authorBox,   1, 1);
+        grid.add(label("Genre"),     0, 2); grid.add(genreField,  1, 2);
+        grid.add(label("ISBN"),      0, 3); grid.add(isbnField,   1, 3);
+        grid.add(label("Pub. year"), 0, 4); grid.add(yearField,   1, 4);
+        grid.add(label("Copies"),    0, 5); grid.add(copiesField, 1, 5);
+
+        dialog.getDialogPane().setContent(grid);
+
+        // ── Validation on OK ──────────────────────────────────────
+        Button okBtn = (Button) dialog.getDialogPane().lookupButton(ButtonType.OK);
+        okBtn.addEventFilter(ActionEvent.ACTION, ev -> {
+            String errors = validateBookForm(titleField, authorBox, yearField, copiesField);
+            if (!errors.isEmpty()) {
+                showAlert(Alert.AlertType.ERROR, "Validation error", errors);
+                ev.consume();         // keep dialog open
+            }
+        });
+
+        // ── Result converter ──────────────────────────────────────
+        dialog.setResultConverter(btn -> {
+            if (btn != ButtonType.OK) return null;
+
+            Book b = new Book();
+            b.setTitle(titleField.getText().trim());
+            Author a = authorBox.getValue();
+            b.setAuthorId(a.getId());
+            b.setAuthorName(a.getFullName());
+            b.setGenre(coalesce(genreField.getText()));
+            b.setIsbn(coalesce(isbnField.getText()));
+            b.setPubYear(parseIntOrZero(yearField.getText()));
+            b.setCopies(Math.max(1, parseIntOrZero(copiesField.getText())));
+            return b;
+        });
 
         return dialog.showAndWait();
     }
 
     // ── Dialog validation ─────────────────────────────────────────
-    private String validateBookForm() {
+    private String validateBookForm(TextField titleField,
+                                    ComboBox<Author> authorBox,
+                                    TextField yearField,
+                                    TextField copiesField) {
         StringBuilder sb = new StringBuilder();
 
+        if (titleField.getText().isBlank())
+            sb.append("Title is required.");
         // if field isBlank / isNull
         // show message
+        // add compare for year, copies
 
         return sb.toString();
     }
@@ -198,7 +264,20 @@ public class MainController {
         a.setContentText(msg);
         a.showAndWait();
     }
-    
+
+    private static TextField field(String value, String prompt) {
+        TextField tf = new TextField(value);
+        tf.setPromptText(prompt);
+        tf.setPrefWidth(220);
+        return tf;
+    }
+
+    private static Label label(String text) {
+        Label l = new Label(text);
+        l.setMinWidth(80);
+        return l;
+    }
+
     private static String str(int v)          { return v == 0 ? "" : String.valueOf(v); }
     private static int    parseIntOrZero(String s) {
         try { return Integer.parseInt(s.trim()); } catch (NumberFormatException e) { return 0; }
