@@ -16,7 +16,7 @@ public class Main {
         System.setOut(new PrintStream(System.out, true, StandardCharsets.UTF_8));
 
         System.out.println("===========================================");
-        System.out.println("  Library Management System — v0.3");
+        System.out.println("  Library Management System — v0.5");
         System.out.println("  Project structure: OK ✅");
         System.out.println("  Java version: " + System.getProperty("java.version"));
 
