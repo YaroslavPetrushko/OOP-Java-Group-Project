@@ -47,7 +47,7 @@ public class MainController {
     @FXML private TableColumn<Book, String>     bookAuthorCol;
     @FXML private TableColumn<Book, String>     bookGenreCol;
     @FXML private TableColumn<Book, String>     bookIsbnCol;
-    @FXML private TableColumn<Book, Integer>    bookYearCol;
+    @FXML private TableColumn<Book, String>     bookYearCol;
     @FXML private TableColumn<Book, Integer>    bookCopiesCol;
     @FXML private TextField                     bookSearchField;
 
@@ -101,7 +101,10 @@ public class MainController {
         bookAuthorCol.setCellValueFactory(d  -> new SimpleStringProperty(d.getValue().getAuthorName()));
         bookGenreCol .setCellValueFactory(d  -> new SimpleStringProperty(d.getValue().getGenre()));
         bookIsbnCol  .setCellValueFactory(d  -> new SimpleStringProperty(d.getValue().getIsbn()));
-        bookYearCol  .setCellValueFactory(d -> new SimpleIntegerProperty(d.getValue().getPubYear()).asObject());
+        bookYearCol  .setCellValueFactory(d  ->{
+            int year=d.getValue().getPubYear();
+        return new SimpleStringProperty(year==0?"N/A" : String.valueOf(year));
+        });
         bookCopiesCol.setCellValueFactory(d -> new SimpleIntegerProperty(d.getValue().getCopies()).asObject());
 
         booksTable.setItems(booksData);
