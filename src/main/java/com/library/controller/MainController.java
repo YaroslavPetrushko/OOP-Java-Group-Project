@@ -13,6 +13,7 @@ import com.library.model.Book;
 import com.library.model.Loan;
 import com.library.model.Reader;
 import javafx.beans.property.SimpleIntegerProperty;
+import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -99,17 +100,17 @@ public class MainController {
     public void initialize() {
         setupBooksTable();
         setupAuthorsTable();
-//        setupReadersTable();
+        setupReadersTable();
 //        setupLoansTable();
 
         loadBooks();
         loadAuthors();
-//        loadReaders();
+        loadReaders();
 //        loadLoans();
 
         setupBookSearch();
         setupAuthorSearch();
-//        setupReaderSearch();
+        setupReaderSearch();
 //        setupLoanSearch();
 
         setStatus("Connected ✅  |  CRUD ready");
@@ -431,9 +432,140 @@ public class MainController {
     }
 
     // Readers
-    @FXML private void onAddReader()    { /* Step 6 */ }
-    @FXML private void onEditReader()   { /* Step 6 */ }
-    @FXML private void onDeleteReader() { /* Step 6 */ }
+    private void setupReadersTable() {
+        readerIdCol     .setCellValueFactory(d -> new SimpleIntegerProperty(d.getValue().getId()).asObject());
+        readerNameCol   .setCellValueFactory(d -> new SimpleStringProperty(d.getValue().getFullName()));
+        readerEmailCol  .setCellValueFactory(d -> new SimpleStringProperty(d.getValue().getEmail()));
+        readerPhoneCol  .setCellValueFactory(d -> new SimpleStringProperty(d.getValue().getPhone()));
+        readerRegDateCol.setCellValueFactory(d -> new SimpleObjectProperty<>(d.getValue().getRegDate()));
+        readersTable.setItems(readersData);
+    }
+
+    private void loadReaders() {
+        readersData.setAll(readerDao.findAll());
+    }
+
+    private void setupReaderSearch() {
+        readerSearchField.textProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal == null || newVal.isBlank()) {
+                readersData.setAll(readerDao.findAll());
+            } else {
+                readersData.setAll(readerDao.findByName(newVal.trim()));
+            }
+        });
+    }
+
+    @FXML private void onAddReader()    {
+        showReaderDialog(null).ifPresent(reader -> {
+            readerDao.insert(reader);
+            loadReaders();
+            setStatus("Reader \"" + reader.getFullName() + "\" added.");
+        });
+    }
+
+    @FXML private void onEditReader()   {
+        Reader selected = readersTable.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            showAlert(Alert.AlertType.WARNING, "No selection",
+                    "Please select a reader to edit.");
+            return;
+        }
+        showReaderDialog(selected).ifPresent(updated -> {
+            updated.setId(selected.getId());
+            readerDao.update(updated);
+            loadReaders();
+            setStatus("Reader \"" + updated.getFullName() + "\" updated.");
+        });
+
+    }
+    @FXML private void onDeleteReader() {
+        Reader selected = readersTable.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            showAlert(Alert.AlertType.WARNING, "No selection",
+                    "Please select a reader to delete.");
+            return;
+        }
+
+        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION,
+                "Delete \"" + selected.getFullName() + "\"?\nThis action cannot be undone.",
+                ButtonType.YES, ButtonType.NO);
+        confirm.setTitle("Confirm deletion");
+        confirm.setHeaderText(null);
+
+        confirm.showAndWait().ifPresent(btn -> {
+            if (btn == ButtonType.YES) {
+                readerDao.delete(selected.getId());
+                loadReaders();
+                setStatus("Reader deleted.");
+            }
+        });
+    }
+
+    private Optional<Reader> showReaderDialog(Reader existing) {
+        boolean isEdit = existing != null;
+
+        Dialog<Reader> dialog = new Dialog<>();
+        dialog.setTitle(isEdit ? "Edit Reader" : "Add Reader");
+        dialog.setHeaderText(null);
+        dialog.getDialogPane().getButtonTypes()
+                .addAll(ButtonType.OK, ButtonType.CANCEL);
+
+        // ── Form ─────────────────────────────────────────────────
+        GridPane grid = new GridPane();
+        grid.setHgap(12);
+        grid.setVgap(10);
+        grid.setPadding(new Insets(18, 24, 8, 24));
+
+        TextField nameField  = field(isEdit ? existing.getFullName()              : "", "Full Name*");
+        TextField emailField  = field(isEdit ? existing.getEmail()              : "", "email@example.com");
+        TextField phoneField   = field(isEdit ? existing.getPhone()               : "", "+380...");
+        DatePicker registerDate  = new DatePicker(isEdit ? existing.getRegDate() : LocalDate.now());
+        registerDate.setPrefWidth(220);
+
+        grid.add(label("Full Name *"),   0, 0); grid.add(nameField,  1, 0);
+        grid.add(label("Email"),  0, 1); grid.add(emailField,   1, 1);
+        grid.add(label("Phone"),     0, 2); grid.add(phoneField,  1, 2);
+        grid.add(label("Reg. date"),      0, 3); grid.add(registerDate,   1, 3);
+
+        dialog.getDialogPane().setContent(grid);
+
+        // ── Validation on OK ──────────────────────────────────────
+        Button okBtn = (Button) dialog.getDialogPane().lookupButton(ButtonType.OK);
+        okBtn.addEventFilter(ActionEvent.ACTION, ev -> {
+            String errors = validateReaderForm(nameField, emailField, phoneField, registerDate);
+            if (!errors.isEmpty()) {
+                showAlert(Alert.AlertType.ERROR, "Validation error", errors);
+                ev.consume();         // keep dialog open
+            }
+        });
+
+        // ── Result converter ──────────────────────────────────────
+        dialog.setResultConverter(btn -> {
+            if (btn != ButtonType.OK) return null;
+
+            Reader r = new Reader();
+            r.setFullName(nameField.getText().trim());
+            r.setEmail(coalesce(emailField.getText()));
+            r.setPhone(coalesce(phoneField.getText()));
+            r.setRegDate(registerDate.getValue());
+            return r;
+        });
+
+        return dialog.showAndWait();
+    }
+
+    // ── Dialog validation ─────────────────────────────────────────
+    private String validateReaderForm(TextField nameField,
+                                    TextField emailField,
+                                    TextField phoneField,
+                                      DatePicker registerDate) {
+        StringBuilder sb = new StringBuilder();
+        if (nameField.getText().isBlank())
+            sb.append("• Name is required.\n");
+        if (registerDate.getValue() == null)
+            sb.append("• Registration date is required.\n");
+        return sb.toString();
+    }
 
     // Loans
     @FXML private void onAddLoan()    { /* Step 6 */ }
