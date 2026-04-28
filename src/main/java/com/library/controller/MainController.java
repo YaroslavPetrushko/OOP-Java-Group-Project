@@ -2,8 +2,12 @@ package com.library.controller;
 
 import com.library.dao.AuthorDao;
 import com.library.dao.BookDao;
+import com.library.dao.LoanDao;
+import com.library.dao.ReaderDao;
 import com.library.dao.impl.AuthorDaoImpl;
 import com.library.dao.impl.BookDaoImpl;
+import com.library.dao.impl.LoanDaoImpl;
+import com.library.dao.impl.ReaderDaoImpl;
 import com.library.model.Author;
 import com.library.model.Book;
 import com.library.model.Loan;
@@ -34,8 +38,10 @@ import java.util.Optional;
 public class MainController {
 
     // ── DAOs ─────────────────────────────────────────────────────
-    private final BookDao   bookDao     = new BookDaoImpl();
-    private final AuthorDao authorDao   = new AuthorDaoImpl();
+    private final BookDao   bookDao   = new BookDaoImpl();
+    private final AuthorDao authorDao = new AuthorDaoImpl();
+    private final ReaderDao readerDao = new ReaderDaoImpl();
+    private final LoanDao loanDao   = new LoanDaoImpl();
 
     // ── Status bar ────────────────────────────────────────────────
     @FXML private Label statusLabel;
@@ -61,6 +67,8 @@ public class MainController {
     @FXML private TableColumn<Author, Integer>  authorBirthYearCol;
     @FXML private TextField                     authorSearchField;
 
+    private final ObservableList<Author> authorsData = FXCollections.observableArrayList();
+
     // ── Readers (Step 6) ──────────────────────────────────────────
     @FXML private TableView<Reader>                 readersTable;
     @FXML private TableColumn<Reader, Integer>      readerIdCol;
@@ -69,6 +77,8 @@ public class MainController {
     @FXML private TableColumn<Reader, String>       readerPhoneCol;
     @FXML private TableColumn<Reader, LocalDate>    readerRegDateCol;
     @FXML private TextField                         readerSearchField;
+
+    private final ObservableList<Reader> readersData = FXCollections.observableArrayList();
 
     // ── Loans (Step 6) ────────────────────────────────────────────
     @FXML private TableView<Loan>               loansTable;
@@ -80,15 +90,29 @@ public class MainController {
     @FXML private TableColumn<Loan, String>     loanStatusCol;
     @FXML private TextField                     loanSearchField;
 
+    private final ObservableList<Loan> loansData = FXCollections.observableArrayList();
+
     // ════════════════════════════════════════════════════════════
     //  Init
     // ════════════════════════════════════════════════════════════
     @FXML
     public void initialize() {
         setupBooksTable();
+        setupAuthorsTable();
+//        setupReadersTable();
+//        setupLoansTable();
+
         loadBooks();
+        loadAuthors();
+//        loadReaders();
+//        loadLoans();
+
         setupBookSearch();
-        setStatus("Connected ✅  |  Books CRUD ready");
+        setupAuthorSearch();
+//        setupReaderSearch();
+//        setupLoanSearch();
+
+        setStatus("Connected ✅  |  CRUD ready");
     }
 
     // ════════════════════════════════════════════════════════════
@@ -280,14 +304,138 @@ public class MainController {
     // ════════════════════════════════════════════════════════════
     //  Stubs — Authors / Readers / Loans (Step 6)
     // ════════════════════════════════════════════════════════════
-    @FXML private void onAddAuthor()    { /* Step 6 */ }
-    @FXML private void onEditAuthor()   { /* Step 6 */ }
-    @FXML private void onDeleteAuthor() { /* Step 6 */ }
 
+    // Authors
+    private void setupAuthorsTable() {
+        authorIdCol       .setCellValueFactory(d -> new SimpleIntegerProperty(d.getValue().getId()).asObject());
+        authorNameCol     .setCellValueFactory(d -> new SimpleStringProperty(d.getValue().getFullName()));
+        authorCountryCol  .setCellValueFactory(d -> new SimpleStringProperty(d.getValue().getCountry()));
+        authorBirthYearCol.setCellValueFactory(d -> new SimpleIntegerProperty(d.getValue().getBirthYear()).asObject());
+        authorsTable.setItems(authorsData);
+    }
+
+    private void loadAuthors() {
+        authorsData.setAll(authorDao.findAll());
+    }
+
+    private void setupAuthorSearch() {
+        authorSearchField.textProperty().addListener((obs, o, n) ->
+                authorsData.setAll(n == null || n.isBlank()
+                        ? authorDao.findAll()
+                        : authorDao.findByName(n.trim())));
+    }
+
+    @FXML private void onAddAuthor()    {
+        showAuthorDialog(null).ifPresent(author -> {
+            authorDao.insert(author);
+            loadAuthors();
+            setStatus("Author \"" + author.getFullName() + "\" added.");
+        });
+    }
+
+    @FXML private void onEditAuthor()   {
+        Author selected = authorsTable.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            showAlert(Alert.AlertType.WARNING, "No selection",
+                    "Select an author to edit.");
+            return;
+        }
+        showAuthorDialog(selected).ifPresent(updated -> {
+            updated.setId(selected.getId());
+            authorDao.update(updated);
+            loadAuthors();
+            setStatus("Author \"" + updated.getFullName() + "\" updated.");
+        });
+    }
+
+    @FXML private void onDeleteAuthor() {
+        Author selected = authorsTable.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            showAlert(Alert.AlertType.WARNING, "No selection",
+                    "Please select an author to delete.");
+            return;
+        }
+
+        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION,
+                "Delete \"" + selected.getFullName() + "\"?\nThis action cannot be undone.",
+                ButtonType.YES, ButtonType.NO);
+        confirm.setTitle("Confirm deletion");
+        confirm.setHeaderText(null);
+
+        confirm.showAndWait().ifPresent(btn -> {
+            if (btn == ButtonType.YES) {
+                authorDao.delete(selected.getId());
+                loadAuthors();
+                setStatus("Author deleted.");
+            }
+        });
+    }
+
+    private Optional<Author> showAuthorDialog(Author existing) {
+        boolean isEdit = existing != null;
+
+        Dialog<Author> dialog = new Dialog<>();
+        dialog.setTitle(isEdit ? "Edit Author" : "Add Author");
+        dialog.setHeaderText(null);
+        dialog.getDialogPane().getButtonTypes()
+                .addAll(ButtonType.OK, ButtonType.CANCEL);
+
+        // ── Form ─────────────────────────────────────────────────
+        GridPane grid = new GridPane();
+        grid.setHgap(12);
+        grid.setVgap(10);
+        grid.setPadding(new Insets(18, 24, 8, 24));
+
+        TextField nameField  = field(isEdit ? existing.getFullName()        : "", "Full name *");
+        TextField countryField = field(isEdit ? existing.getCountry()         : "", "Country");
+        TextField yearField  = field(isEdit ? str(existing.getBirthYear())  : "", "e.g. 1950");
+
+        grid.add(label("Full name *"),  0, 0); grid.add(nameField,  1, 0);
+        grid.add(label("Country"),      0, 1); grid.add(countryField, 1, 1);
+        grid.add(label("Birth year"),   0, 2); grid.add(yearField,  1, 2);
+
+        dialog.getDialogPane().setContent(grid);
+
+        Button okBtn = (Button) dialog.getDialogPane().lookupButton(ButtonType.OK);
+        okBtn.addEventFilter(ActionEvent.ACTION, ev -> {
+            String errors = validateAuthorForm(nameField, countryField, yearField);
+            if (!errors.isEmpty()) {
+                showAlert(Alert.AlertType.ERROR, "Validation error", errors);
+                ev.consume();         // keep dialog open
+            }
+        });
+
+        dialog.setResultConverter(btn -> {
+            if (btn != ButtonType.OK) return null;
+
+            Author a = new Author();
+            a.setFullName(nameField.getText().trim());
+            a.setCountry(countryField.getText());
+            a.setBirthYear(parseIntOrZero(yearField.getText()));
+            return a;
+        });
+
+        return dialog.showAndWait();
+    }
+
+    private String validateAuthorForm(TextField nameField,
+                                    TextField countryField,
+                                    TextField yearField) {
+        StringBuilder sb = new StringBuilder();
+        if (nameField.getText().isBlank())
+            sb.append("• Name is required.\n");
+        String yr = yearField.getText().trim();
+        if (!yr.isEmpty() && !yr.matches("\\d{1,4}"))
+            sb.append("• Year must be a 1–4 digit number.\n");
+        return sb.toString();
+    }
+
+    // Readers
     @FXML private void onAddReader()    { /* Step 6 */ }
     @FXML private void onEditReader()   { /* Step 6 */ }
     @FXML private void onDeleteReader() { /* Step 6 */ }
 
+    // Loans
     @FXML private void onAddLoan()    { /* Step 6 */ }
     @FXML private void onEditLoan()   { /* Step 6 */ }
     @FXML private void onDeleteLoan() { /* Step 6 */ }
