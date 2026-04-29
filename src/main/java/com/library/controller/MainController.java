@@ -101,17 +101,17 @@ public class MainController {
         setupBooksTable();
         setupAuthorsTable();
         setupReadersTable();
-//        setupLoansTable();
+        setupLoansTable();
 
         loadBooks();
         loadAuthors();
         loadReaders();
-//        loadLoans();
+        loadLoans();
 
         setupBookSearch();
         setupAuthorSearch();
         setupReaderSearch();
-//        setupLoanSearch();
+        setupLoanSearch();
 
         setStatus("Connected ✅  |  CRUD ready");
     }
@@ -568,9 +568,182 @@ public class MainController {
     }
 
     // Loans
-    @FXML private void onAddLoan()    { /* Step 6 */ }
-    @FXML private void onEditLoan()   { /* Step 6 */ }
-    @FXML private void onDeleteLoan() { /* Step 6 */ }
+    private void setupLoansTable() {
+        loanIdCol    .setCellValueFactory(d -> new SimpleIntegerProperty(d.getValue().getId()).asObject());
+        loanBookCol  .setCellValueFactory(d -> new SimpleStringProperty(d.getValue().getBookTitle()));
+        loanReaderCol.setCellValueFactory(d -> new SimpleStringProperty(d.getValue().getReaderName()));
+        loanDateCol  .setCellValueFactory(d -> new SimpleObjectProperty<>(d.getValue().getLoanDate()));
+        loanDueCol   .setCellValueFactory(d -> new SimpleObjectProperty<>(d.getValue().getDueDate()));
+        loanStatusCol.setCellValueFactory(d -> new SimpleStringProperty(d.getValue().getStatus()));
+
+        loansTable.setItems(loansData);
+    }
+
+    private void loadLoans() {
+        loansData.setAll(loanDao.findAll());
+    }
+
+    private void setupLoanSearch() {
+        loanSearchField.textProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal == null || newVal.isBlank()) {
+                loansData.setAll(loanDao.findAll());
+            } else {
+                loansData.setAll(loanDao.findBySearch(newVal.trim()));
+            }
+        });
+    }
+
+    @FXML private void onAddLoan()    {
+        showLoanDialog(null).ifPresent(loan -> {
+            loanDao.insert(loan);
+            loadBooks();
+            setStatus("Loan added.");
+        });
+    }
+    @FXML private void onEditLoan()   {
+        Loan selected = loansTable.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            showAlert(Alert.AlertType.WARNING, "No selection",
+                    "Please select a loan to edit.");
+            return;
+        }
+        showLoanDialog(selected).ifPresent(updated -> {
+            updated.setId(selected.getId());
+            loanDao.update(updated);
+            loadLoans();
+            setStatus("Book updated.");
+        });
+    }
+    @FXML private void onDeleteLoan() {
+        Loan selected = loansTable.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            showAlert(Alert.AlertType.WARNING, "No selection",
+                    "Please select a loan to delete.");
+            return;
+        }
+
+        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION,
+                "Delete \"" + selected.getId() + "\"?\nThis action cannot be undone.",
+                ButtonType.YES, ButtonType.NO);
+        confirm.setTitle("Confirm deletion");
+        confirm.setHeaderText(null);
+
+        confirm.showAndWait().ifPresent(btn -> {
+            if (btn == ButtonType.YES) {
+                loanDao.delete(selected.getId());
+                loadLoans();
+                setStatus("Loan deleted.");
+            }
+        });
+    }
+
+    private Optional<Loan> showLoanDialog(Loan existing) {
+        boolean isEdit = existing != null;
+
+        Dialog<Loan> dialog = new Dialog<>();
+        dialog.setTitle(isEdit ? "Edit Loan" : "Add Loan");
+        dialog.setHeaderText(null);
+        dialog.getDialogPane().getButtonTypes()
+                .addAll(ButtonType.OK, ButtonType.CANCEL);
+
+        // ── Form ─────────────────────────────────────────────────
+        GridPane grid = new GridPane();
+        grid.setHgap(12);
+        grid.setVgap(10);
+        grid.setPadding(new Insets(18, 24, 8, 24));
+
+        List<Book> books = bookDao.findAll();
+        ComboBox<Book> bookBox = new ComboBox<>(FXCollections.observableArrayList(books));
+        bookBox.setConverter(new StringConverter<>() {
+            @Override public String toString(Book b)   { return b == null ? "" : b.getTitle(); }
+            @Override public Book fromString(String s) { return null; }
+            }
+        );
+        bookBox.setPromptText("Select book *");
+        bookBox.setPrefWidth(220);
+        if (isEdit) {
+            books.stream()
+                    .filter(b -> b.getId() == existing.getBookId())
+                    .findFirst()
+                    .ifPresent(bookBox::setValue);
+        }
+
+        List <Reader> readers = readerDao.findAll();
+        ComboBox<Reader> readerBox = new ComboBox<>(FXCollections.observableArrayList(readers));
+        readerBox.setConverter(new StringConverter<>() {
+            @Override public String toString(Reader reader)   { return reader == null ? "" : reader.getFullName(); }
+            @Override public Reader fromString(String s) { return null; }
+        });
+        readerBox.setPromptText("Select reader *");
+        readerBox.setPrefWidth(220);
+        if (isEdit) {
+            readers.stream()
+                    .filter(r -> r.getId() == existing.getReaderId())
+                    .findFirst()
+                    .ifPresent(readerBox::setValue);
+        }
+
+        DatePicker loanDate = new DatePicker(isEdit ? existing.getLoanDate():LocalDate.now());
+        DatePicker dueDate = new DatePicker(isEdit ? existing.getDueDate(): LocalDate.now().plusDays(21));
+        loanDate.setPrefWidth(220);
+        dueDate.setPrefWidth(220);
+
+        ComboBox<String> statusBox = new ComboBox<>(FXCollections.observableArrayList("active", "returned", "overdue"));
+        statusBox.setValue(isEdit ? existing.getStatus() : "active");
+        statusBox.setPrefWidth(220);
+
+        grid.add(label("Book *"),   0, 0); grid.add(bookBox,  1, 0);
+        grid.add(label("Reader *"),  0, 1); grid.add(readerBox,   1, 1);
+        grid.add(label("Loan date"),     0, 2); grid.add(loanDate,  1, 2);
+        grid.add(label("Due date"),      0, 3); grid.add(dueDate,   1, 3);
+        grid.add(label("Status"),      0, 4); grid.add(statusBox,   1, 4);
+        dialog.getDialogPane().setContent(grid);
+
+        // ── Validation on OK ──────────────────────────────────────
+        Button okBtn = (Button) dialog.getDialogPane().lookupButton(ButtonType.OK);
+        okBtn.addEventFilter(ActionEvent.ACTION, ev -> {
+            String errors = validateLoanForm(bookBox, readerBox, loanDate, dueDate);
+            if (!errors.isEmpty()) {
+                showAlert(Alert.AlertType.ERROR, "Validation error", errors);
+                ev.consume();         // keep dialog open
+            }
+        });
+
+        // ── Result converter ──────────────────────────────────────
+        dialog.setResultConverter(btn -> {
+            if (btn != ButtonType.OK) return null;
+
+            Book b = bookBox.getValue();
+            Reader r = readerBox.getValue();
+            Loan l = new Loan();
+            l.setBookId(b.getId());
+            l.setBookTitle(b.getTitle());
+            l.setReaderId(r.getId());
+            l.setReaderName(r.getFullName());
+            l.setLoanDate(loanDate.getValue());
+            l.setDueDate(dueDate.getValue());
+            l.setStatus(statusBox.getValue());
+
+            return l;
+        });
+
+        return dialog.showAndWait();
+    }
+
+    // ── Dialog validation ─────────────────────────────────────────
+    private String validateLoanForm(ComboBox bookBox,
+                                      ComboBox readerBox,
+                                      DatePicker loanDate,
+                                      DatePicker dueDate) {
+        StringBuilder sb = new StringBuilder();
+        if (bookBox.getValue()==null)
+            sb.append("• Book is required.\n");
+        if (readerBox.getValue()==null)
+            sb.append("• Reader is required.\n");
+        if (dueDate.getValue() == null)
+            sb.append("• Due date is required.\n");
+        return sb.toString();
+    }
 
     // ════════════════════════════════════════════════════════════
     //  Utilities
