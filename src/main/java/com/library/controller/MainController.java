@@ -576,6 +576,22 @@ public class MainController {
         loanDueCol   .setCellValueFactory(d -> new SimpleObjectProperty<>(d.getValue().getDueDate()));
         loanStatusCol.setCellValueFactory(d -> new SimpleStringProperty(d.getValue().getStatus()));
 
+        // colour-code status
+        loanStatusCol.setCellFactory(col -> new TableCell<>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) { setText(null); setStyle(""); return; }
+                setText(item);
+                setStyle(switch (item) {
+                    case "active"   -> "-fx-text-fill: #2e7d32; -fx-font-weight: bold;";
+                    case "overdue"  -> "-fx-text-fill: #c62828; -fx-font-weight: bold;";
+                    case "returned" -> "-fx-text-fill: #757575;";
+                    default         -> "";
+                });
+            }
+        });
+        
         loansTable.setItems(loansData);
     }
 
