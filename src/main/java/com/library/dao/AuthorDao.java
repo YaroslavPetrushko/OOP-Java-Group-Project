@@ -6,9 +6,15 @@ import java.util.Optional;
 
 public interface AuthorDao {
     List<Author>     findAll();
-    List<Author>     findByName(String name);
     Optional<Author> findById(int id);
-    void             insert(Author author);
-    void             update(Author author);
-    void             delete(int id);
+
+    /** text шукає в full_name + country + birth_year; country/year — додаткові фільтри. */
+    List<Author>  search(String text, String country, Integer yearFrom, Integer yearTo);
+
+    /** Унікальні країни для ComboBox-фільтра. */
+    List<String>  findAllCountries();
+
+    void insert(Author author);
+    void update(Author author);
+    void delete(int id);
 }
