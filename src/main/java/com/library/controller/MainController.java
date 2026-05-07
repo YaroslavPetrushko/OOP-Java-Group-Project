@@ -1,17 +1,8 @@
 package com.library.controller;
 
-import com.library.dao.AuthorDao;
-import com.library.dao.BookDao;
-import com.library.dao.LoanDao;
-import com.library.dao.ReaderDao;
-import com.library.dao.impl.AuthorDaoImpl;
-import com.library.dao.impl.BookDaoImpl;
-import com.library.dao.impl.LoanDaoImpl;
-import com.library.dao.impl.ReaderDaoImpl;
-import com.library.model.Author;
-import com.library.model.Book;
-import com.library.model.Loan;
-import com.library.model.Reader;
+import com.library.dao.*;
+import com.library.dao.impl.*;
+import com.library.model.*;
 import javafx.beans.property.SimpleIntegerProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.property.SimpleStringProperty;
@@ -31,10 +22,9 @@ import java.util.Optional;
 /**
  * Controller for MainView.fxml.
  *
- * Step 5 — Books CRUD fully wired:
- *   cellValueFactory (lambda), ObservableList, live search,
- *   Add / Edit / Delete with inline dialog.
- * Step 6 — Authors, Readers, Loans stubs (onAction handlers present).
+ * Step 5 — Books CRUD.
+ * Step 6 — Authors / Readers / Loans CRUD.
+ * Step 7 — Multi-field search + filter bars for all four tabs.
  */
 public class MainController {
 
@@ -42,54 +32,73 @@ public class MainController {
     private final BookDao   bookDao   = new BookDaoImpl();
     private final AuthorDao authorDao = new AuthorDaoImpl();
     private final ReaderDao readerDao = new ReaderDaoImpl();
-    private final LoanDao loanDao   = new LoanDaoImpl();
+    private final LoanDao   loanDao   = new LoanDaoImpl();
 
     // ── Status bar ────────────────────────────────────────────────
     @FXML private Label statusLabel;
 
     // ── Books ─────────────────────────────────────────────────────
-    @FXML private TableView<Book>               booksTable;
-    @FXML private TableColumn<Book, Integer>    bookIdCol;
-    @FXML private TableColumn<Book, String>     bookTitleCol;
-    @FXML private TableColumn<Book, String>     bookAuthorCol;
-    @FXML private TableColumn<Book, String>     bookGenreCol;
-    @FXML private TableColumn<Book, String>     bookIsbnCol;
-    @FXML private TableColumn<Book, String>     bookYearCol;
-    @FXML private TableColumn<Book, Integer>    bookCopiesCol;
-    @FXML private TextField                     bookSearchField;
+    @FXML private TableView<Book>            booksTable;
+    @FXML private TableColumn<Book, Integer> bookIdCol;
+    @FXML private TableColumn<Book, String>  bookTitleCol;
+    @FXML private TableColumn<Book, String>  bookAuthorCol;
+    @FXML private TableColumn<Book, String>  bookGenreCol;
+    @FXML private TableColumn<Book, String>  bookIsbnCol;
+    @FXML private TableColumn<Book, Integer> bookYearCol;
+    @FXML private TableColumn<Book, Integer> bookCopiesCol;
+
+    // search + filters
+    @FXML private TextField        bookSearchField;
+    @FXML private ComboBox<String> bookGenreFilter;
+    @FXML private TextField        bookYearFrom;
+    @FXML private TextField        bookYearTo;
 
     private final ObservableList<Book> booksData = FXCollections.observableArrayList();
 
-    // ── Authors (Step 6) ──────────────────────────────────────────
-    @FXML private TableView<Author>             authorsTable;
-    @FXML private TableColumn<Author, Integer>  authorIdCol;
-    @FXML private TableColumn<Author, String>   authorNameCol;
-    @FXML private TableColumn<Author, String>   authorCountryCol;
-    @FXML private TableColumn<Author, Integer>  authorBirthYearCol;
-    @FXML private TextField                     authorSearchField;
+    // ── Authors ──────────────────────────────────────────
+    @FXML private TableView<Author>            authorsTable;
+    @FXML private TableColumn<Author, Integer> authorIdCol;
+    @FXML private TableColumn<Author, String>  authorNameCol;
+    @FXML private TableColumn<Author, String>  authorCountryCol;
+    @FXML private TableColumn<Author, Integer> authorBirthYearCol;
+
+    // search + filters
+    @FXML private TextField        authorSearchField;
+    @FXML private ComboBox<String> authorCountryFilter;
+    @FXML private TextField        authorYearFrom;
+    @FXML private TextField        authorYearTo;
 
     private final ObservableList<Author> authorsData = FXCollections.observableArrayList();
 
-    // ── Readers (Step 6) ──────────────────────────────────────────
-    @FXML private TableView<Reader>                 readersTable;
-    @FXML private TableColumn<Reader, Integer>      readerIdCol;
-    @FXML private TableColumn<Reader, String>       readerNameCol;
-    @FXML private TableColumn<Reader, String>       readerEmailCol;
-    @FXML private TableColumn<Reader, String>       readerPhoneCol;
-    @FXML private TableColumn<Reader, LocalDate>    readerRegDateCol;
-    @FXML private TextField                         readerSearchField;
+    // ── Readers ──────────────────────────────────────────
+    @FXML private TableView<Reader>              readersTable;
+    @FXML private TableColumn<Reader, Integer>   readerIdCol;
+    @FXML private TableColumn<Reader, String>    readerNameCol;
+    @FXML private TableColumn<Reader, String>    readerEmailCol;
+    @FXML private TableColumn<Reader, String>    readerPhoneCol;
+    @FXML private TableColumn<Reader, LocalDate> readerRegDateCol;
+
+    // search + filters
+    @FXML private TextField  readerSearchField;
+    @FXML private DatePicker readerRegFrom;
+    @FXML private DatePicker readerRegTo;
 
     private final ObservableList<Reader> readersData = FXCollections.observableArrayList();
 
-    // ── Loans (Step 6) ────────────────────────────────────────────
-    @FXML private TableView<Loan>               loansTable;
-    @FXML private TableColumn<Loan, Integer>    loanIdCol;
-    @FXML private TableColumn<Loan, String>     loanBookCol;
-    @FXML private TableColumn<Loan, String>     loanReaderCol;
-    @FXML private TableColumn<Loan, LocalDate>  loanDateCol;
-    @FXML private TableColumn<Loan, LocalDate>  loanDueCol;
-    @FXML private TableColumn<Loan, String>     loanStatusCol;
-    @FXML private TextField                     loanSearchField;
+    // ── Loans ────────────────────────────────────────────
+    @FXML private TableView<Loan>              loansTable;
+    @FXML private TableColumn<Loan, Integer>   loanIdCol;
+    @FXML private TableColumn<Loan, String>    loanBookCol;
+    @FXML private TableColumn<Loan, String>    loanReaderCol;
+    @FXML private TableColumn<Loan, LocalDate> loanDateCol;
+    @FXML private TableColumn<Loan, LocalDate> loanDueCol;
+    @FXML private TableColumn<Loan, String>    loanStatusCol;
+
+    // search + filters
+    @FXML private TextField        loanSearchField;
+    @FXML private ComboBox<String> loanStatusFilter;
+    @FXML private DatePicker       loanDateFrom;
+    @FXML private DatePicker       loanDateTo;
 
     private final ObservableList<Loan> loansData = FXCollections.observableArrayList();
 
@@ -103,6 +112,7 @@ public class MainController {
         setupReadersTable();
         setupLoansTable();
 
+        // delete
         loadBooks();
         loadAuthors();
         loadReaders();
@@ -113,28 +123,35 @@ public class MainController {
         setupReaderSearch();
         setupLoanSearch();
 
+        // add
+//        initBookFilters();
+//        initAuthorFilters();
+//        initReaderFilters();
+//        initLoanFilters();
+//
+//        applyBooksFilter();
+//        applyAuthorsFilter();
+//        applyReadersFilter();
+//        applyLoansFilter();
+
         setStatus("Connected ✅  |  CRUD ready");
     }
 
     // ════════════════════════════════════════════════════════════
-    //  Books — setup
+    //  Books — table setup
     // ════════════════════════════════════════════════════════════
     private void setupBooksTable() {
-        // Lambda-based CVF — no reflection, no module-info changes needed
         bookIdCol    .setCellValueFactory(d -> new SimpleIntegerProperty(d.getValue().getId()).asObject());
-        bookTitleCol .setCellValueFactory(d  -> new SimpleStringProperty(d.getValue().getTitle()));
-        bookAuthorCol.setCellValueFactory(d  -> new SimpleStringProperty(d.getValue().getAuthorName()));
-        bookGenreCol .setCellValueFactory(d  -> new SimpleStringProperty(d.getValue().getGenre()));
-        bookIsbnCol  .setCellValueFactory(d  -> new SimpleStringProperty(d.getValue().getIsbn()));
-        bookYearCol  .setCellValueFactory(d  ->{
-            int year=d.getValue().getPubYear();
-        return new SimpleStringProperty(year==0?"N/A" : String.valueOf(year));
-        });
+        bookTitleCol .setCellValueFactory(d -> new SimpleStringProperty(d.getValue().getTitle()));
+        bookAuthorCol.setCellValueFactory(d -> new SimpleStringProperty(d.getValue().getAuthorName()));
+        bookGenreCol .setCellValueFactory(d -> new SimpleStringProperty(d.getValue().getGenre()));
+        bookIsbnCol  .setCellValueFactory(d -> new SimpleStringProperty(d.getValue().getIsbn()));
+        bookYearCol  .setCellValueFactory(d -> new SimpleIntegerProperty(d.getValue().getPubYear()).asObject());
         bookCopiesCol.setCellValueFactory(d -> new SimpleIntegerProperty(d.getValue().getCopies()).asObject());
-
         booksTable.setItems(booksData);
     }
 
+    // Переписати
     private void loadBooks() {
         booksData.setAll(bookDao.findAll());
     }
@@ -144,10 +161,38 @@ public class MainController {
             if (newVal == null || newVal.isBlank()) {
                 booksData.setAll(bookDao.findAll());
             } else {
-                booksData.setAll(bookDao.findByTitle(newVal.trim()));
+                // booksData.setAll(bookDao.findByTitle(newVal.trim())); //хто там прибрав findByTitle з DAO?
             }
         });
     }
+
+    // ════════════════════════════════════════════════════════════
+    //  BOOKS — filters init & apply
+    // ════════════════════════════════════════════════════════════
+    private void initBookFilters() {
+        // Genre ComboBox
+        //bookGenreFilter.getItems()... setValue();
+
+        // Listeners - react to changes
+        bookSearchField.textProperty() .addListener((o, p, n) -> applyBooksFilter());
+        bookGenreFilter.valueProperty().addListener((o, p, n) -> applyBooksFilter());
+        bookYearFrom   .textProperty() .addListener((o, p, n) -> applyBooksFilter());
+        bookYearTo     .textProperty() .addListener((o, p, n) -> applyBooksFilter());
+    }
+
+    // Read all books controls
+    private void applyBooksFilter() {
+        String  text  = bookSearchField.getText();
+        //String  genre = bookGenreFilter.getValue();
+        //Integer yearFrom = bookYearFrom.parse(getText());
+        //Integer yearTo   = bookYearTo.parse(getText());
+
+        //booksData.setAll(bookDao.search());
+    }
+
+    // add clear action to fxml
+    @FXML
+    private void onClearBooksFilter() {}
 
     // ════════════════════════════════════════════════════════════
     //  Books — CRUD actions
@@ -207,6 +252,8 @@ public class MainController {
     /**
      * @param existing null → Add mode; non-null → Edit mode (pre-fills fields)
      */
+
+    //refactor
     private Optional<Book> showBookDialog(Book existing) {
         boolean isEdit = existing != null;
 
@@ -303,10 +350,8 @@ public class MainController {
     }
 
     // ════════════════════════════════════════════════════════════
-    //  Stubs — Authors / Readers / Loans (Step 6)
+    //  AUTHORS — table setup
     // ════════════════════════════════════════════════════════════
-
-    // Authors
     private void setupAuthorsTable() {
         authorIdCol       .setCellValueFactory(d -> new SimpleIntegerProperty(d.getValue().getId()).asObject());
         authorNameCol     .setCellValueFactory(d -> new SimpleStringProperty(d.getValue().getFullName()));
@@ -315,17 +360,39 @@ public class MainController {
         authorsTable.setItems(authorsData);
     }
 
+    // delete
     private void loadAuthors() {
         authorsData.setAll(authorDao.findAll());
     }
 
     private void setupAuthorSearch() {
-        authorSearchField.textProperty().addListener((obs, o, n) ->
-                authorsData.setAll(n == null || n.isBlank()
-                        ? authorDao.findAll()
-                        : authorDao.findByName(n.trim())));
+//        authorSearchField.textProperty().addListener((obs, o, n) ->
+//                authorsData.setAll(n == null || n.isBlank()
+//                        ? authorDao.findAll()
+//                        : authorDao.findByName(n.trim()))); // not working after DAO update
     }
 
+    // ════════════════════════════════════════════════════════════
+    //  AUTHORS — filters init & apply
+    // ════════════════════════════════════════════════════════════
+    private void initAuthorFilters() {
+        // get items and add listeners
+    }
+
+    private void applyAuthorsFilter() {
+        String text = authorSearchField.getText();
+        //String country = authorCountryFilter;
+        //Integer yearFrom = parse(authorYearFrom;
+        //Integer yearTo = parse(authorYearTo;
+
+        //authorsData.setAll(authorDao.search());
+    }
+
+    // Add clear action to fxml
+
+    // ════════════════════════════════════════════════════════════
+    //  AUTHORS — CRUD
+    // ════════════════════════════════════════════════════════════
     @FXML private void onAddAuthor()    {
         showAuthorDialog(null).ifPresent(author -> {
             authorDao.insert(author);
@@ -372,6 +439,7 @@ public class MainController {
         });
     }
 
+    // refactor
     private Optional<Author> showAuthorDialog(Author existing) {
         boolean isEdit = existing != null;
 
@@ -420,8 +488,8 @@ public class MainController {
     }
 
     private String validateAuthorForm(TextField nameField,
-                                    TextField countryField,
-                                    TextField yearField) {
+                                      TextField countryField,
+                                      TextField yearField) {
         StringBuilder sb = new StringBuilder();
         if (nameField.getText().isBlank())
             sb.append("• Name is required.\n");
@@ -431,7 +499,9 @@ public class MainController {
         return sb.toString();
     }
 
-    // Readers
+    // ════════════════════════════════════════════════════════════
+    //  READERS — table setup
+    // ════════════════════════════════════════════════════════════
     private void setupReadersTable() {
         readerIdCol     .setCellValueFactory(d -> new SimpleIntegerProperty(d.getValue().getId()).asObject());
         readerNameCol   .setCellValueFactory(d -> new SimpleStringProperty(d.getValue().getFullName()));
@@ -441,6 +511,7 @@ public class MainController {
         readersTable.setItems(readersData);
     }
 
+    // delete
     private void loadReaders() {
         readersData.setAll(readerDao.findAll());
     }
@@ -450,11 +521,32 @@ public class MainController {
             if (newVal == null || newVal.isBlank()) {
                 readersData.setAll(readerDao.findAll());
             } else {
-                readersData.setAll(readerDao.findByName(newVal.trim()));
+                //readersData.setAll(readerDao.findByName(newVal.trim())); // not working after dao update
             }
         });
     }
 
+    // ════════════════════════════════════════════════════════════
+    //  READERS — filters init & apply
+    // ════════════════════════════════════════════════════════════
+    private void initReaderFilters() {
+        // add listeners
+
+    }
+
+    private void applyReadersFilter() {
+        String text  = readerSearchField.getText();
+        //LocalDate from = readerRegFrom;
+        //LocalDate to = readerRegTo;
+
+        //readersData.setAll(readerDao.search());
+    }
+
+    // add clear action to fxml
+
+    // ════════════════════════════════════════════════════════════
+    //  READERS — CRUD
+    // ════════════════════════════════════════════════════════════
     @FXML private void onAddReader()    {
         showReaderDialog(null).ifPresent(reader -> {
             readerDao.insert(reader);
@@ -501,6 +593,7 @@ public class MainController {
         });
     }
 
+    // refactor
     private Optional<Reader> showReaderDialog(Reader existing) {
         boolean isEdit = existing != null;
 
@@ -567,7 +660,9 @@ public class MainController {
         return sb.toString();
     }
 
-    // Loans
+    // ════════════════════════════════════════════════════════════
+    //  LOANS — table setup
+    // ════════════════════════════════════════════════════════════
     private void setupLoansTable() {
         loanIdCol    .setCellValueFactory(d -> new SimpleIntegerProperty(d.getValue().getId()).asObject());
         loanBookCol  .setCellValueFactory(d -> new SimpleStringProperty(d.getValue().getBookTitle()));
@@ -595,6 +690,7 @@ public class MainController {
         loansTable.setItems(loansData);
     }
 
+    // delete
     private void loadLoans() {
         loansData.setAll(loanDao.findAll());
     }
@@ -604,11 +700,33 @@ public class MainController {
             if (newVal == null || newVal.isBlank()) {
                 loansData.setAll(loanDao.findAll());
             } else {
-                loansData.setAll(loanDao.findBySearch(newVal.trim()));
+                //loansData.setAll(loanDao.findBySearch(newVal.trim())); // not working after dao update
             }
         });
     }
 
+    // ════════════════════════════════════════════════════════════
+    //  LOANS — filters init & apply
+    // ════════════════════════════════════════════════════════════
+    private void initLoanFilters() {
+        loanStatusFilter.getItems().addAll("", "active", "returned", "overdue");
+       // ...
+    }
+
+    private void applyLoansFilter() {
+        String text   = loanSearchField.getText();
+        //String status = loanStatusFilter;
+        //LocalDate from = loanDateFrom;
+        //LocalDate to = loanDateTo;
+
+        //loansData.setAll(loanDao.search());
+    }
+
+    // add clear action to fxml
+
+    // ════════════════════════════════════════════════════════════
+    //  LOANS — CRUD
+    // ════════════════════════════════════════════════════════════
     @FXML private void onAddLoan()    {
         showLoanDialog(null).ifPresent(loan -> {
             loanDao.insert(loan);
@@ -671,9 +789,9 @@ public class MainController {
         List<Book> books = bookDao.findAll();
         ComboBox<Book> bookBox = new ComboBox<>(FXCollections.observableArrayList(books));
         bookBox.setConverter(new StringConverter<>() {
-            @Override public String toString(Book b)   { return b == null ? "" : b.getTitle(); }
-            @Override public Book fromString(String s) { return null; }
-            }
+                                 @Override public String toString(Book b)   { return b == null ? "" : b.getTitle(); }
+                                 @Override public Book fromString(String s) { return null; }
+                             }
         );
         bookBox.setPromptText("Select book *");
         bookBox.setPrefWidth(220);
