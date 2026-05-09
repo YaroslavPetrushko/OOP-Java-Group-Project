@@ -340,43 +340,44 @@ public class MainController {
         authorsTable.setItems(authorsData);
     }
 
-    // delete
-    private void loadAuthors() {
-        authorsData.setAll(authorDao.findAll());
-    }
-
-    private void setupAuthorSearch() {
-//        authorSearchField.textProperty().addListener((obs, o, n) ->
-//                authorsData.setAll(n == null || n.isBlank()
-//                        ? authorDao.findAll()
-//                        : authorDao.findByName(n.trim()))); // not working after DAO update
-    }
-
     // ════════════════════════════════════════════════════════════
     //  AUTHORS — filters init & apply
     // ════════════════════════════════════════════════════════════
     private void initAuthorFilters() {
-        // get items and add listeners
+        authorCountryFilter.getItems().add("");
+        authorCountryFilter.getItems().addAll(authorDao.findAllCountries());
+        authorCountryFilter.setValue("");
+
+        authorSearchField   .textProperty() .addListener((o, p, n) -> applyAuthorsFilter());
+        authorCountryFilter .valueProperty().addListener((o, p, n) -> applyAuthorsFilter());
+        authorYearFrom      .textProperty() .addListener((o, p, n) -> applyAuthorsFilter());
+        authorYearTo        .textProperty() .addListener((o, p, n) -> applyAuthorsFilter());
     }
 
     private void applyAuthorsFilter() {
-        String text = authorSearchField.getText();
-        //String country = authorCountryFilter;
-        //Integer yearFrom = parse(authorYearFrom;
-        //Integer yearTo = parse(authorYearTo;
+        String  text    = authorSearchField.getText();
+        String  country = authorCountryFilter.getValue();
+        Integer yFrom   = parseIntOrZero(authorYearFrom.getText());
+        Integer yTo     = parseIntOrZero(authorYearTo.getText());
 
-        //authorsData.setAll(authorDao.search());
+        authorsData.setAll(authorDao.search(text, country, yFrom, yTo));
+        setStatus("Authors: " + authorsData.size() + " record(s) found.");
     }
 
-    // Add clear action to fxml
-
+    @FXML
+    private void onClearAuthorsFilter() {
+        authorSearchField.clear();
+        authorCountryFilter.setValue("");
+        authorYearFrom.clear();
+        authorYearTo.clear();
+    }
     // ════════════════════════════════════════════════════════════
     //  AUTHORS — CRUD
     // ════════════════════════════════════════════════════════════
     @FXML private void onAddAuthor()    {
         showAuthorDialog(null).ifPresent(author -> {
             authorDao.insert(author);
-            loadAuthors();
+            applyAuthorsFilter();
             setStatus("Author \"" + author.getFullName() + "\" added.");
         });
     }
@@ -391,7 +392,7 @@ public class MainController {
         showAuthorDialog(selected).ifPresent(updated -> {
             updated.setId(selected.getId());
             authorDao.update(updated);
-            loadAuthors();
+            applyAuthorsFilter();
             setStatus("Author \"" + updated.getFullName() + "\" updated.");
         });
     }
@@ -413,7 +414,7 @@ public class MainController {
         confirm.showAndWait().ifPresent(btn -> {
             if (btn == ButtonType.YES) {
                 authorDao.delete(selected.getId());
-                loadAuthors();
+                applyAuthorsFilter();
                 setStatus("Author deleted.");
             }
         });
