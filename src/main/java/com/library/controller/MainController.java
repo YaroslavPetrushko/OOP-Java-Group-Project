@@ -663,39 +663,36 @@ public class MainController {
         loansTable.setItems(loansData);
     }
 
-    // delete
-    private void loadLoans() {
-        loansData.setAll(loanDao.findAll());
-    }
-
-    private void setupLoanSearch() {
-        loanSearchField.textProperty().addListener((obs, oldVal, newVal) -> {
-            if (newVal == null || newVal.isBlank()) {
-                loansData.setAll(loanDao.findAll());
-            } else {
-                //loansData.setAll(loanDao.findBySearch(newVal.trim())); // not working after dao update
-            }
-        });
-    }
-
     // ════════════════════════════════════════════════════════════
     //  LOANS — filters init & apply
     // ════════════════════════════════════════════════════════════
     private void initLoanFilters() {
         loanStatusFilter.getItems().addAll("", "active", "returned", "overdue");
-       // ...
+        loanStatusFilter.setValue("");
+
+        loanSearchField .textProperty() .addListener((o, p, n) -> applyLoansFilter());
+        loanStatusFilter.valueProperty().addListener((o, p, n) -> applyLoansFilter());
+        loanDateFrom    .valueProperty().addListener((o, p, n) -> applyLoansFilter());
+        loanDateTo      .valueProperty().addListener((o, p, n) -> applyLoansFilter());
     }
 
     private void applyLoansFilter() {
-        String text   = loanSearchField.getText();
-        //String status = loanStatusFilter;
-        //LocalDate from = loanDateFrom;
-        //LocalDate to = loanDateTo;
+        String    text   = loanSearchField.getText();
+        String    status = loanStatusFilter.getValue();
+        LocalDate from   = loanDateFrom.getValue();
+        LocalDate to     = loanDateTo.getValue();
 
-        //loansData.setAll(loanDao.search());
+        loansData.setAll(loanDao.search(text, status, from, to));
+        setStatus("Loans: " + loansData.size() + " record(s) found.");
     }
 
-    // add clear action to fxml
+    @FXML
+    private void onClearLoansFilter() {
+        loanSearchField.clear();
+        loanStatusFilter.setValue("");
+        loanDateFrom.setValue(null);
+        loanDateTo.setValue(null);
+    }
 
     // ════════════════════════════════════════════════════════════
     //  LOANS — CRUD
@@ -703,7 +700,7 @@ public class MainController {
     @FXML private void onAddLoan()    {
         showLoanDialog(null).ifPresent(loan -> {
             loanDao.insert(loan);
-            loadBooks();
+            applyLoansFilter();
             setStatus("Loan added.");
         });
     }
@@ -717,7 +714,7 @@ public class MainController {
         showLoanDialog(selected).ifPresent(updated -> {
             updated.setId(selected.getId());
             loanDao.update(updated);
-            loadLoans();
+            applyLoansFilter();
             setStatus("Book updated.");
         });
     }
@@ -738,7 +735,7 @@ public class MainController {
         confirm.showAndWait().ifPresent(btn -> {
             if (btn == ButtonType.YES) {
                 loanDao.delete(selected.getId());
-                loadLoans();
+                applyLoansFilter();
                 setStatus("Loan deleted.");
             }
         });
