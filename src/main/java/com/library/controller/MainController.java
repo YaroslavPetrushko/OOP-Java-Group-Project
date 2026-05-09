@@ -492,38 +492,30 @@ public class MainController {
         readersTable.setItems(readersData);
     }
 
-    // delete
-    private void loadReaders() {
-        readersData.setAll(readerDao.findAll());
-    }
-
-    private void setupReaderSearch() {
-        readerSearchField.textProperty().addListener((obs, oldVal, newVal) -> {
-            if (newVal == null || newVal.isBlank()) {
-                readersData.setAll(readerDao.findAll());
-            } else {
-                //readersData.setAll(readerDao.findByName(newVal.trim())); // not working after dao update
-            }
-        });
-    }
-
     // ════════════════════════════════════════════════════════════
     //  READERS — filters init & apply
     // ════════════════════════════════════════════════════════════
     private void initReaderFilters() {
-        // add listeners
-
+        readerSearchField.textProperty()   .addListener((o, p, n) -> applyReadersFilter());
+        readerRegFrom    .valueProperty()  .addListener((o, p, n) -> applyReadersFilter());
+        readerRegTo      .valueProperty()  .addListener((o, p, n) -> applyReadersFilter());
     }
 
     private void applyReadersFilter() {
-        String text  = readerSearchField.getText();
-        //LocalDate from = readerRegFrom;
-        //LocalDate to = readerRegTo;
+        String    text  = readerSearchField.getText();
+        LocalDate from  = readerRegFrom.getValue();
+        LocalDate to    = readerRegTo.getValue();
 
-        //readersData.setAll(readerDao.search());
+        readersData.setAll(readerDao.search(text, from, to));
+        setStatus("Readers: " + readersData.size() + " record(s) found.");
     }
 
-    // add clear action to fxml
+    @FXML
+    private void onClearReadersFilter() {
+        readerSearchField.clear();
+        readerRegFrom.setValue(null);
+        readerRegTo.setValue(null);
+    }
 
     // ════════════════════════════════════════════════════════════
     //  READERS — CRUD
@@ -531,7 +523,7 @@ public class MainController {
     @FXML private void onAddReader()    {
         showReaderDialog(null).ifPresent(reader -> {
             readerDao.insert(reader);
-            loadReaders();
+            applyReadersFilter();
             setStatus("Reader \"" + reader.getFullName() + "\" added.");
         });
     }
@@ -546,7 +538,7 @@ public class MainController {
         showReaderDialog(selected).ifPresent(updated -> {
             updated.setId(selected.getId());
             readerDao.update(updated);
-            loadReaders();
+            applyReadersFilter();
             setStatus("Reader \"" + updated.getFullName() + "\" updated.");
         });
 
@@ -568,7 +560,7 @@ public class MainController {
         confirm.showAndWait().ifPresent(btn -> {
             if (btn == ButtonType.YES) {
                 readerDao.delete(selected.getId());
-                loadReaders();
+                applyReadersFilter();
                 setStatus("Reader deleted.");
             }
         });
