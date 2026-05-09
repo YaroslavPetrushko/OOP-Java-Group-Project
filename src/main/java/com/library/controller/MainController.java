@@ -112,27 +112,15 @@ public class MainController {
         setupReadersTable();
         setupLoansTable();
 
-        // delete
-        loadBooks();
-        loadAuthors();
-        loadReaders();
-        loadLoans();
+        initBookFilters();
+        initAuthorFilters();
+        initReaderFilters();
+        initLoanFilters();
 
-        setupBookSearch();
-        setupAuthorSearch();
-        setupReaderSearch();
-        setupLoanSearch();
-
-        // add
-//        initBookFilters();
-//        initAuthorFilters();
-//        initReaderFilters();
-//        initLoanFilters();
-//
-//        applyBooksFilter();
-//        applyAuthorsFilter();
-//        applyReadersFilter();
-//        applyLoansFilter();
+        applyBooksFilter();
+        applyAuthorsFilter();
+        applyReadersFilter();
+        applyLoansFilter();
 
         setStatus("Connected ✅  |  CRUD ready");
     }
@@ -151,27 +139,14 @@ public class MainController {
         booksTable.setItems(booksData);
     }
 
-    // Переписати
-    private void loadBooks() {
-        booksData.setAll(bookDao.findAll());
-    }
-
-    private void setupBookSearch() {
-        bookSearchField.textProperty().addListener((obs, oldVal, newVal) -> {
-            if (newVal == null || newVal.isBlank()) {
-                booksData.setAll(bookDao.findAll());
-            } else {
-                // booksData.setAll(bookDao.findByTitle(newVal.trim())); //хто там прибрав findByTitle з DAO?
-            }
-        });
-    }
-
     // ════════════════════════════════════════════════════════════
     //  BOOKS — filters init & apply
     // ════════════════════════════════════════════════════════════
     private void initBookFilters() {
         // Genre ComboBox
-        //bookGenreFilter.getItems()... setValue();
+        bookGenreFilter.getItems().add("");          // sentinel for "all"
+        bookGenreFilter.getItems().addAll(bookDao.findAllGenres());
+        bookGenreFilter.setValue("");
 
         // Listeners - react to changes
         bookSearchField.textProperty() .addListener((o, p, n) -> applyBooksFilter());
@@ -182,17 +157,22 @@ public class MainController {
 
     // Read all books controls
     private void applyBooksFilter() {
-        String  text  = bookSearchField.getText();
-        //String  genre = bookGenreFilter.getValue();
-        //Integer yearFrom = bookYearFrom.parse(getText());
-        //Integer yearTo   = bookYearTo.parse(getText());
+        String text  = bookSearchField.getText();
+        String genre = bookGenreFilter.getValue();
+        Integer yearFrom = parseIntOrZero(bookYearFrom.getText());
+        Integer yearTo = parseIntOrZero(bookYearTo.getText());
 
-        //booksData.setAll(bookDao.search());
+        booksData.setAll(bookDao.search(text, genre, yearFrom, yearTo));
+        setStatus("Books: " + booksData.size() + " record(s) found.");
     }
 
-    // add clear action to fxml
     @FXML
-    private void onClearBooksFilter() {}
+    private void onClearBooksFilter() {
+        bookSearchField.clear();
+        bookGenreFilter.setValue("");
+        bookYearFrom.clear();
+        bookYearTo.clear();
+    }
 
     // ════════════════════════════════════════════════════════════
     //  Books — CRUD actions
@@ -201,7 +181,7 @@ public class MainController {
     private void onAddBook() {
         showBookDialog(null).ifPresent(book -> {
             bookDao.insert(book);
-            loadBooks();
+            applyBooksFilter();
             setStatus("Book \"" + book.getTitle() + "\" added.");
         });
     }
@@ -217,7 +197,7 @@ public class MainController {
         showBookDialog(selected).ifPresent(updated -> {
             updated.setId(selected.getId());
             bookDao.update(updated);
-            loadBooks();
+            applyBooksFilter();
             setStatus("Book \"" + updated.getTitle() + "\" updated.");
         });
     }
@@ -240,7 +220,7 @@ public class MainController {
         confirm.showAndWait().ifPresent(btn -> {
             if (btn == ButtonType.YES) {
                 bookDao.delete(selected.getId());
-                loadBooks();
+                applyBooksFilter();
                 setStatus("Book deleted.");
             }
         });
@@ -686,7 +666,7 @@ public class MainController {
                 });
             }
         });
-        
+
         loansTable.setItems(loansData);
     }
 
