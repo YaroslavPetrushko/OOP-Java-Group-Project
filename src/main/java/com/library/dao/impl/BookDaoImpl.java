@@ -52,7 +52,15 @@ public class BookDaoImpl implements BookDao {
 
     private static final String DELETE = "DELETE FROM books WHERE id=?";
 
-    // ── Helpers ───────────────────────────────────────────────────
+    /**
+     * PostgreSQL SQL state code for foreign-key violation.
+     * Thrown when trying to delete a book that still has loans.
+     */
+    private static final String FK_VIOLATION = "23503";
+
+    // ── Connection helper ─────────────────────────────────────────
+
+    /** @return the active JDBC connection from the singleton pool */
     private Connection conn() { return DBConnection.getInstance().getConnection(); }
 
     // ── Row mapper ────────────────────────────────────────────────
@@ -168,6 +176,7 @@ public class BookDaoImpl implements BookDao {
             ps.executeUpdate();
         } catch (SQLException e) {
             System.err.println("BookDao.insert: " + e.getMessage());
+            throw new RuntimeException("Failed to add book: " + e.getMessage(), e);
         }
     }
 
@@ -184,6 +193,7 @@ public class BookDaoImpl implements BookDao {
             ps.executeUpdate();
         } catch (SQLException e) {
             System.err.println("BookDao.update: " + e.getMessage());
+            throw new RuntimeException("Failed to update book: " + e.getMessage(), e);
         }
     }
 
@@ -202,6 +212,12 @@ public class BookDaoImpl implements BookDao {
             ps.executeUpdate();
         } catch (SQLException e) {
             System.err.println("BookDao.delete: " + e.getMessage());
+            if (FK_VIOLATION.equals(e.getSQLState())) {
+                throw new RuntimeException(
+                        "Cannot delete this book — it is referenced by one or more loans.\n" +
+                                "Delete or return all related loans first.", e);
+            }
+            throw new RuntimeException("Failed to delete book: " + e.getMessage(), e);
         }
     }
 

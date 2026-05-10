@@ -161,6 +161,7 @@ public class LoanDaoImpl implements LoanDao {
             ps.executeUpdate();
         } catch (SQLException e) {
             System.err.println("LoanDao.insert: " + e.getMessage());
+            throw new RuntimeException("Failed to add loan: " + e.getMessage(), e);
         }
     }
 
@@ -176,6 +177,7 @@ public class LoanDaoImpl implements LoanDao {
             ps.executeUpdate();
         } catch (SQLException e) {
             System.err.println("LoanDao.update: " + e.getMessage());
+            throw new RuntimeException("Failed to update loan: " + e.getMessage(), e);
         }
     }
 
@@ -186,6 +188,7 @@ public class LoanDaoImpl implements LoanDao {
             ps.executeUpdate();
         } catch (SQLException e) {
             System.err.println("LoanDao.delete: " + e.getMessage());
+            throw new RuntimeException("Failed to delete loan: " + e.getMessage(), e);
         }
     }
 

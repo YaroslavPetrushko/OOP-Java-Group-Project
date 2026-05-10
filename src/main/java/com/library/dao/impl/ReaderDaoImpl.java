@@ -40,7 +40,15 @@ public class ReaderDaoImpl implements ReaderDao {
             "UPDATE readers SET full_name=?, email=?, phone=?, reg_date=? WHERE id=?";
     private static final String DELETE = "DELETE FROM readers WHERE id=?";
 
-    // ── Helpers ───────────────────────────────────────────────────
+    /**
+     * PostgreSQL SQL state code for foreign-key violation.
+     * Thrown when trying to delete a reader who still has loans.
+     */
+    private static final String FK_VIOLATION = "23503";
+
+    // ── Connection helper ─────────────────────────────────────────
+
+    /** @return the active JDBC connection from the singleton pool */
     private Connection conn() { return DBConnection.getInstance().getConnection(); }
 
     // ── Row mapper ────────────────────────────────────────────────
@@ -139,6 +147,7 @@ public class ReaderDaoImpl implements ReaderDao {
             ps.executeUpdate();
         } catch (SQLException e) {
             System.err.println("ReaderDao.insert: " + e.getMessage());
+            throw new RuntimeException("Failed to add reader: " + e.getMessage(), e);
         }
     }
 
@@ -153,6 +162,7 @@ public class ReaderDaoImpl implements ReaderDao {
             ps.executeUpdate();
         } catch (SQLException e) {
             System.err.println("ReaderDao.update: " + e.getMessage());
+            throw new RuntimeException("Failed to update reader: " + e.getMessage(), e);
         }
     }
 
@@ -171,6 +181,12 @@ public class ReaderDaoImpl implements ReaderDao {
             ps.executeUpdate();
         } catch (SQLException e) {
             System.err.println("ReaderDao.delete: " + e.getMessage());
+            if (FK_VIOLATION.equals(e.getSQLState())) {
+                throw new RuntimeException(
+                        "Cannot delete this reader — they still have loan records.\n" +
+                                "Delete or close all related loans first.", e);
+            }
+            throw new RuntimeException("Failed to delete reader: " + e.getMessage(), e);
         }
     }
 
