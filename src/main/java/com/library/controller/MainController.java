@@ -18,6 +18,7 @@ import javafx.util.StringConverter;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Supplier;
 
 /**
  * Controller for MainView.fxml.
@@ -172,6 +173,7 @@ public class MainController {
         bookGenreFilter.setValue("");
         bookYearFrom.clear();
         bookYearTo.clear();
+        // listeners trigger applyBooksFilter automatically
     }
 
     // ════════════════════════════════════════════════════════════
@@ -233,81 +235,53 @@ public class MainController {
      * @param existing null → Add mode; non-null → Edit mode (pre-fills fields)
      */
 
-    //refactor
     private Optional<Book> showBookDialog(Book existing) {
-        boolean isEdit = existing != null;
+        boolean edit = existing != null;
+        Dialog<Book> dlg = dialog(edit ? "Edit Book" : "Add Book");
 
-        Dialog<Book> dialog = new Dialog<>();
-        dialog.setTitle(isEdit ? "Edit Book" : "Add Book");
-        dialog.setHeaderText(null);
-        dialog.getDialogPane().getButtonTypes()
-                .addAll(ButtonType.OK, ButtonType.CANCEL);
+        GridPane g = grid();
+        TextField titleF  = field(edit ? existing.getTitle()        : "", "Book title *");
+        TextField genreF  = field(edit ? existing.getGenre()        : "", "Genre");
+        TextField isbnF   = field(edit ? existing.getIsbn()         : "", "ISBN");
+        TextField yearF   = field(edit ? str(existing.getPubYear()) : "", "e.g. 2024");
+        TextField copiesF = field(edit ? str(existing.getCopies())  : "1", "≥ 1");
 
-        // ── Form ─────────────────────────────────────────────────
-        GridPane grid = new GridPane();
-        grid.setHgap(12);
-        grid.setVgap(10);
-        grid.setPadding(new Insets(18, 24, 8, 24));
+        ComboBox<Author> authorBox = authorComboBox();
+        if (edit) authorBox.getItems().stream()
+                .filter(a -> a.getId() == existing.getAuthorId())
+                .findFirst().ifPresent(authorBox::setValue);
 
-        TextField titleField  = field(isEdit ? existing.getTitle()              : "", "Book title *");
-        TextField genreField  = field(isEdit ? existing.getGenre()              : "", "Genre");
-        TextField isbnField   = field(isEdit ? existing.getIsbn()               : "", "ISBN");
-        TextField yearField   = field(isEdit ? str(existing.getPubYear())       : "", "e.g. 2024");
-        TextField copiesField = field(isEdit ? str(existing.getCopies())        : "1", "≥ 1");
+        g.add(label("Title *"),   0, 0); g.add(titleF,   1, 0);
+        g.add(label("Author *"),  0, 1); g.add(authorBox, 1, 1);
+        g.add(label("Genre"),     0, 2); g.add(genreF,   1, 2);
+        g.add(label("ISBN"),      0, 3); g.add(isbnF,    1, 3);
+        g.add(label("Pub. year"), 0, 4); g.add(yearF,    1, 4);
+        g.add(label("Copies"),    0, 5); g.add(copiesF,  1, 5);
+        dlg.getDialogPane().setContent(g);
 
-        // Author dropdown
-        List<Author> authors = authorDao.findAll();
-        ComboBox<Author> authorBox = new ComboBox<>(
-                FXCollections.observableArrayList(authors));
-        authorBox.setConverter(new StringConverter<>() {
-            @Override public String toString(Author a)   { return a == null ? "" : a.getFullName(); }
-            @Override public Author fromString(String s) { return null; }
-        });
-        authorBox.setPromptText("Select author *");
-        authorBox.setPrefWidth(220);
-        if (isEdit) {
-            authors.stream()
-                    .filter(a -> a.getId() == existing.getAuthorId())
-                    .findFirst()
-                    .ifPresent(authorBox::setValue);
-        }
-
-        grid.add(label("Title *"),   0, 0); grid.add(titleField,  1, 0);
-        grid.add(label("Author *"),  0, 1); grid.add(authorBox,   1, 1);
-        grid.add(label("Genre"),     0, 2); grid.add(genreField,  1, 2);
-        grid.add(label("ISBN"),      0, 3); grid.add(isbnField,   1, 3);
-        grid.add(label("Pub. year"), 0, 4); grid.add(yearField,   1, 4);
-        grid.add(label("Copies"),    0, 5); grid.add(copiesField, 1, 5);
-
-        dialog.getDialogPane().setContent(grid);
-
-        // ── Validation on OK ──────────────────────────────────────
-        Button okBtn = (Button) dialog.getDialogPane().lookupButton(ButtonType.OK);
-        okBtn.addEventFilter(ActionEvent.ACTION, ev -> {
-            String errors = validateBookForm(titleField, authorBox, yearField, copiesField);
-            if (!errors.isEmpty()) {
-                showAlert(Alert.AlertType.ERROR, "Validation error", errors);
-                ev.consume();         // keep dialog open
-            }
+        okFilter(dlg, () -> {
+            String e = "";
+            if (titleF.getText().isBlank())   e += "• Title is required.\n";
+            if (authorBox.getValue() == null) e += "• Author is required.\n";
+            if (!validYear(yearF.getText()))  e += "• Year must be 1–4 digits.\n";
+            if (!validInt(copiesF.getText())) e += "• Copies must be a positive integer.\n";
+            return e;
         });
 
-        // ── Result converter ──────────────────────────────────────
-        dialog.setResultConverter(btn -> {
+        dlg.setResultConverter(btn -> {
             if (btn != ButtonType.OK) return null;
-
-            Book b = new Book();
-            b.setTitle(titleField.getText().trim());
             Author a = authorBox.getValue();
+            Book b = new Book();
+            b.setTitle(titleF.getText().trim());
             b.setAuthorId(a.getId());
             b.setAuthorName(a.getFullName());
-            b.setGenre(coalesce(genreField.getText()));
-            b.setIsbn(coalesce(isbnField.getText()));
-            b.setPubYear(parseIntOrZero(yearField.getText()));
-            b.setCopies(Math.max(1, parseIntOrZero(copiesField.getText())));
+            b.setGenre(coalesce(genreF.getText()));
+            b.setIsbn(coalesce(isbnF.getText()));
+            b.setPubYear(toInt(yearF.getText()));
+            b.setCopies(Math.max(1, toInt(copiesF.getText())));
             return b;
         });
-
-        return dialog.showAndWait();
+        return dlg.showAndWait();
     }
 
     // ── Dialog validation ─────────────────────────────────────────
@@ -357,10 +331,10 @@ public class MainController {
     private void applyAuthorsFilter() {
         String  text    = authorSearchField.getText();
         String  country = authorCountryFilter.getValue();
-        Integer yFrom   = parseIntOrZero(authorYearFrom.getText());
-        Integer yTo     = parseIntOrZero(authorYearTo.getText());
+        Integer yearFrom   = parseIntOrZero(authorYearFrom.getText());
+        Integer yearTo     = parseIntOrZero(authorYearTo.getText());
 
-        authorsData.setAll(authorDao.search(text, country, yFrom, yTo));
+        authorsData.setAll(authorDao.search(text, country, yearFrom, yearTo));
         setStatus("Authors: " + authorsData.size() + " record(s) found.");
     }
 
@@ -420,64 +394,36 @@ public class MainController {
         });
     }
 
-    // refactor
     private Optional<Author> showAuthorDialog(Author existing) {
-        boolean isEdit = existing != null;
+        boolean edit = existing != null;
+        Dialog<Author> dlg = dialog(edit ? "Edit Author" : "Add Author");
 
-        Dialog<Author> dialog = new Dialog<>();
-        dialog.setTitle(isEdit ? "Edit Author" : "Add Author");
-        dialog.setHeaderText(null);
-        dialog.getDialogPane().getButtonTypes()
-                .addAll(ButtonType.OK, ButtonType.CANCEL);
+        GridPane g = grid();
+        TextField nameF  = field(edit ? existing.getFullName()       : "", "Full name *");
+        TextField cntryF = field(edit ? existing.getCountry()        : "", "Country");
+        TextField yearF  = field(edit ? str(existing.getBirthYear()) : "", "e.g. 1950");
 
-        // ── Form ─────────────────────────────────────────────────
-        GridPane grid = new GridPane();
-        grid.setHgap(12);
-        grid.setVgap(10);
-        grid.setPadding(new Insets(18, 24, 8, 24));
+        g.add(label("Full name *"), 0, 0); g.add(nameF,  1, 0);
+        g.add(label("Country"),     0, 1); g.add(cntryF, 1, 1);
+        g.add(label("Birth year"),  0, 2); g.add(yearF,  1, 2);
+        dlg.getDialogPane().setContent(g);
 
-        TextField nameField  = field(isEdit ? existing.getFullName()        : "", "Full name *");
-        TextField countryField = field(isEdit ? existing.getCountry()         : "", "Country");
-        TextField yearField  = field(isEdit ? str(existing.getBirthYear())  : "", "e.g. 1950");
-
-        grid.add(label("Full name *"),  0, 0); grid.add(nameField,  1, 0);
-        grid.add(label("Country"),      0, 1); grid.add(countryField, 1, 1);
-        grid.add(label("Birth year"),   0, 2); grid.add(yearField,  1, 2);
-
-        dialog.getDialogPane().setContent(grid);
-
-        Button okBtn = (Button) dialog.getDialogPane().lookupButton(ButtonType.OK);
-        okBtn.addEventFilter(ActionEvent.ACTION, ev -> {
-            String errors = validateAuthorForm(nameField, countryField, yearField);
-            if (!errors.isEmpty()) {
-                showAlert(Alert.AlertType.ERROR, "Validation error", errors);
-                ev.consume();         // keep dialog open
-            }
+        okFilter(dlg, () -> {
+            String e = "";
+            if (nameF.getText().isBlank())   e += "• Name is required.\n";
+            if (!validYear(yearF.getText())) e += "• Year must be 1–4 digits.\n";
+            return e;
         });
 
-        dialog.setResultConverter(btn -> {
+        dlg.setResultConverter(btn -> {
             if (btn != ButtonType.OK) return null;
-
             Author a = new Author();
-            a.setFullName(nameField.getText().trim());
-            a.setCountry(countryField.getText());
-            a.setBirthYear(parseIntOrZero(yearField.getText()));
+            a.setFullName(nameF.getText().trim());
+            a.setCountry(coalesce(cntryF.getText()));
+            a.setBirthYear(toInt(yearF.getText()));
             return a;
         });
-
-        return dialog.showAndWait();
-    }
-
-    private String validateAuthorForm(TextField nameField,
-                                      TextField countryField,
-                                      TextField yearField) {
-        StringBuilder sb = new StringBuilder();
-        if (nameField.getText().isBlank())
-            sb.append("• Name is required.\n");
-        String yr = yearField.getText().trim();
-        if (!yr.isEmpty() && !yr.matches("\\d{1,4}"))
-            sb.append("• Year must be a 1–4 digit number.\n");
-        return sb.toString();
+        return dlg.showAndWait();
     }
 
     // ════════════════════════════════════════════════════════════
@@ -566,71 +512,40 @@ public class MainController {
         });
     }
 
-    // refactor
     private Optional<Reader> showReaderDialog(Reader existing) {
-        boolean isEdit = existing != null;
+        boolean edit = existing != null;
+        Dialog<Reader> dlg = dialog(edit ? "Edit Reader" : "Add Reader");
 
-        Dialog<Reader> dialog = new Dialog<>();
-        dialog.setTitle(isEdit ? "Edit Reader" : "Add Reader");
-        dialog.setHeaderText(null);
-        dialog.getDialogPane().getButtonTypes()
-                .addAll(ButtonType.OK, ButtonType.CANCEL);
+        GridPane g = grid();
+        TextField  nameF  = field(edit ? existing.getFullName() : "", "Full name *");
+        TextField  emailF = field(edit ? existing.getEmail()    : "", "email@example.com");
+        TextField  phoneF = field(edit ? existing.getPhone()    : "", "+380...");
+        DatePicker regPk  = new DatePicker(edit ? existing.getRegDate() : LocalDate.now());
+        regPk.setPrefWidth(220);
 
-        // ── Form ─────────────────────────────────────────────────
-        GridPane grid = new GridPane();
-        grid.setHgap(12);
-        grid.setVgap(10);
-        grid.setPadding(new Insets(18, 24, 8, 24));
+        g.add(label("Full name *"), 0, 0); g.add(nameF,  1, 0);
+        g.add(label("Email"),       0, 1); g.add(emailF, 1, 1);
+        g.add(label("Phone"),       0, 2); g.add(phoneF, 1, 2);
+        g.add(label("Reg. date"),   0, 3); g.add(regPk,  1, 3);
+        dlg.getDialogPane().setContent(g);
 
-        TextField nameField  = field(isEdit ? existing.getFullName()              : "", "Full Name*");
-        TextField emailField  = field(isEdit ? existing.getEmail()              : "", "email@example.com");
-        TextField phoneField   = field(isEdit ? existing.getPhone()               : "", "+380...");
-        DatePicker registerDate  = new DatePicker(isEdit ? existing.getRegDate() : LocalDate.now());
-        registerDate.setPrefWidth(220);
-
-        grid.add(label("Full Name *"),   0, 0); grid.add(nameField,  1, 0);
-        grid.add(label("Email"),  0, 1); grid.add(emailField,   1, 1);
-        grid.add(label("Phone"),     0, 2); grid.add(phoneField,  1, 2);
-        grid.add(label("Reg. date"),      0, 3); grid.add(registerDate,   1, 3);
-
-        dialog.getDialogPane().setContent(grid);
-
-        // ── Validation on OK ──────────────────────────────────────
-        Button okBtn = (Button) dialog.getDialogPane().lookupButton(ButtonType.OK);
-        okBtn.addEventFilter(ActionEvent.ACTION, ev -> {
-            String errors = validateReaderForm(nameField, emailField, phoneField, registerDate);
-            if (!errors.isEmpty()) {
-                showAlert(Alert.AlertType.ERROR, "Validation error", errors);
-                ev.consume();         // keep dialog open
-            }
+        okFilter(dlg, () -> {
+            String e = "";
+            if (nameF.getText().isBlank()) e += "• Name is required.\n";
+            if (regPk.getValue() == null)  e += "• Registration date is required.\n";
+            return e;
         });
 
-        // ── Result converter ──────────────────────────────────────
-        dialog.setResultConverter(btn -> {
+        dlg.setResultConverter(btn -> {
             if (btn != ButtonType.OK) return null;
-
             Reader r = new Reader();
-            r.setFullName(nameField.getText().trim());
-            r.setEmail(coalesce(emailField.getText()));
-            r.setPhone(coalesce(phoneField.getText()));
-            r.setRegDate(registerDate.getValue());
+            r.setFullName(nameF.getText().trim());
+            r.setEmail(coalesce(emailF.getText()));
+            r.setPhone(coalesce(phoneF.getText()));
+            r.setRegDate(regPk.getValue());
             return r;
         });
-
-        return dialog.showAndWait();
-    }
-
-    // ── Dialog validation ─────────────────────────────────────────
-    private String validateReaderForm(TextField nameField,
-                                    TextField emailField,
-                                    TextField phoneField,
-                                      DatePicker registerDate) {
-        StringBuilder sb = new StringBuilder();
-        if (nameField.getText().isBlank())
-            sb.append("• Name is required.\n");
-        if (registerDate.getValue() == null)
-            sb.append("• Registration date is required.\n");
-        return sb.toString();
+        return dlg.showAndWait();
     }
 
     // ════════════════════════════════════════════════════════════
@@ -742,117 +657,129 @@ public class MainController {
     }
 
     private Optional<Loan> showLoanDialog(Loan existing) {
-        boolean isEdit = existing != null;
+        boolean edit = existing != null;
+        Dialog<Loan> dlg = dialog(edit ? "Edit Loan" : "Add Loan");
 
-        Dialog<Loan> dialog = new Dialog<>();
-        dialog.setTitle(isEdit ? "Edit Loan" : "Add Loan");
-        dialog.setHeaderText(null);
-        dialog.getDialogPane().getButtonTypes()
-                .addAll(ButtonType.OK, ButtonType.CANCEL);
-
-        // ── Form ─────────────────────────────────────────────────
-        GridPane grid = new GridPane();
-        grid.setHgap(12);
-        grid.setVgap(10);
-        grid.setPadding(new Insets(18, 24, 8, 24));
+        GridPane g = grid();
 
         List<Book> books = bookDao.findAll();
         ComboBox<Book> bookBox = new ComboBox<>(FXCollections.observableArrayList(books));
-        bookBox.setConverter(new StringConverter<>() {
-                                 @Override public String toString(Book b)   { return b == null ? "" : b.getTitle(); }
-                                 @Override public Book fromString(String s) { return null; }
-                             }
-        );
+        bookBox.setConverter(strConv(b -> b == null ? "" : b.getTitle()));
         bookBox.setPromptText("Select book *");
         bookBox.setPrefWidth(220);
-        if (isEdit) {
-            books.stream()
-                    .filter(b -> b.getId() == existing.getBookId())
-                    .findFirst()
-                    .ifPresent(bookBox::setValue);
-        }
+        if (edit) books.stream().filter(b -> b.getId() == existing.getBookId())
+                .findFirst().ifPresent(bookBox::setValue);
 
-        List <Reader> readers = readerDao.findAll();
+        List<Reader> readers = readerDao.findAll();
         ComboBox<Reader> readerBox = new ComboBox<>(FXCollections.observableArrayList(readers));
-        readerBox.setConverter(new StringConverter<>() {
-            @Override public String toString(Reader reader)   { return reader == null ? "" : reader.getFullName(); }
-            @Override public Reader fromString(String s) { return null; }
-        });
+        readerBox.setConverter(strConv(r -> r == null ? "" : r.getFullName()));
         readerBox.setPromptText("Select reader *");
         readerBox.setPrefWidth(220);
-        if (isEdit) {
-            readers.stream()
-                    .filter(r -> r.getId() == existing.getReaderId())
-                    .findFirst()
-                    .ifPresent(readerBox::setValue);
-        }
+        if (edit) readers.stream().filter(r -> r.getId() == existing.getReaderId())
+                .findFirst().ifPresent(readerBox::setValue);
 
-        DatePicker loanDate = new DatePicker(isEdit ? existing.getLoanDate():LocalDate.now());
-        DatePicker dueDate = new DatePicker(isEdit ? existing.getDueDate(): LocalDate.now().plusDays(21));
-        loanDate.setPrefWidth(220);
-        dueDate.setPrefWidth(220);
+        DatePicker loanPk = new DatePicker(edit ? existing.getLoanDate() : LocalDate.now());
+        DatePicker duePk  = new DatePicker(edit ? existing.getDueDate()  : LocalDate.now().plusDays(21));
+        loanPk.setPrefWidth(220);
+        duePk.setPrefWidth(220);
 
-        ComboBox<String> statusBox = new ComboBox<>(FXCollections.observableArrayList("active", "returned", "overdue"));
-        statusBox.setValue(isEdit ? existing.getStatus() : "active");
+        ComboBox<String> statusBox = new ComboBox<>(
+                FXCollections.observableArrayList("active", "returned", "overdue"));
+        statusBox.setValue(edit ? existing.getStatus() : "active");
         statusBox.setPrefWidth(220);
 
-        grid.add(label("Book *"),   0, 0); grid.add(bookBox,  1, 0);
-        grid.add(label("Reader *"),  0, 1); grid.add(readerBox,   1, 1);
-        grid.add(label("Loan date"),     0, 2); grid.add(loanDate,  1, 2);
-        grid.add(label("Due date"),      0, 3); grid.add(dueDate,   1, 3);
-        grid.add(label("Status"),      0, 4); grid.add(statusBox,   1, 4);
-        dialog.getDialogPane().setContent(grid);
+        g.add(label("Book *"),     0, 0); g.add(bookBox,   1, 0);
+        g.add(label("Reader *"),   0, 1); g.add(readerBox, 1, 1);
+        g.add(label("Loan date"),  0, 2); g.add(loanPk,   1, 2);
+        g.add(label("Due date *"), 0, 3); g.add(duePk,    1, 3);
+        g.add(label("Status"),     0, 4); g.add(statusBox, 1, 4);
+        dlg.getDialogPane().setContent(g);
 
-        // ── Validation on OK ──────────────────────────────────────
-        Button okBtn = (Button) dialog.getDialogPane().lookupButton(ButtonType.OK);
-        okBtn.addEventFilter(ActionEvent.ACTION, ev -> {
-            String errors = validateLoanForm(bookBox, readerBox, loanDate, dueDate);
-            if (!errors.isEmpty()) {
-                showAlert(Alert.AlertType.ERROR, "Validation error", errors);
-                ev.consume();         // keep dialog open
-            }
+        okFilter(dlg, () -> {
+            String e = "";
+            if (bookBox.getValue()   == null) e += "• Book is required.\n";
+            if (readerBox.getValue() == null) e += "• Reader is required.\n";
+            if (duePk.getValue()     == null) e += "• Due date is required.\n";
+            if (loanPk.getValue() != null && duePk.getValue() != null
+                    && duePk.getValue().isBefore(loanPk.getValue()))
+                e += "• Due date must be after loan date.\n";
+            return e;
         });
 
-        // ── Result converter ──────────────────────────────────────
-        dialog.setResultConverter(btn -> {
+        dlg.setResultConverter(btn -> {
             if (btn != ButtonType.OK) return null;
-
-            Book b = bookBox.getValue();
+            Book   b = bookBox.getValue();
             Reader r = readerBox.getValue();
-            Loan l = new Loan();
+            Loan   l = new Loan();
             l.setBookId(b.getId());
             l.setBookTitle(b.getTitle());
             l.setReaderId(r.getId());
             l.setReaderName(r.getFullName());
-            l.setLoanDate(loanDate.getValue());
-            l.setDueDate(dueDate.getValue());
+            l.setLoanDate(loanPk.getValue());
+            l.setDueDate(duePk.getValue());
             l.setStatus(statusBox.getValue());
-
             return l;
         });
-
-        return dialog.showAndWait();
-    }
-
-    // ── Dialog validation ─────────────────────────────────────────
-    private String validateLoanForm(ComboBox bookBox,
-                                      ComboBox readerBox,
-                                      DatePicker loanDate,
-                                      DatePicker dueDate) {
-        StringBuilder sb = new StringBuilder();
-        if (bookBox.getValue()==null)
-            sb.append("• Book is required.\n");
-        if (readerBox.getValue()==null)
-            sb.append("• Reader is required.\n");
-        if (dueDate.getValue() == null)
-            sb.append("• Due date is required.\n");
-        return sb.toString();
+        return dlg.showAndWait();
     }
 
     // ════════════════════════════════════════════════════════════
     //  Utilities
     // ════════════════════════════════════════════════════════════
+
+    // ── Shared UI helpers ───────────────────────────────────────────
+    private <T> Dialog<T> dialog(String title) {
+        Dialog<T> dlg = new Dialog<>();
+        dlg.setTitle(title);
+        dlg.setHeaderText(null);
+        dlg.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+        return dlg;
+    }
+
+    private GridPane grid() {
+        GridPane g = new GridPane();
+        g.setHgap(12); g.setVgap(10);
+        g.setPadding(new Insets(18, 24, 8, 24));
+        return g;
+    }
+
+    private void okFilter(Dialog<?> dlg, Supplier<String> validator) {
+        Button ok = (Button) dlg.getDialogPane().lookupButton(ButtonType.OK);
+        ok.addEventFilter(ActionEvent.ACTION, ev -> {
+            String errors = validator.get();
+            if (!errors.isEmpty()) {
+                showAlert(Alert.AlertType.ERROR, "Validation error", errors);
+                ev.consume();
+            }
+        });
+    }
+
+    private ComboBox<Author> authorComboBox() {
+        ComboBox<Author> box = new ComboBox<>(
+                FXCollections.observableArrayList(authorDao.findAll()));
+        box.setConverter(strConv(a -> a == null ? "" : a.getFullName()));
+        box.setPromptText("Select author *");
+        box.setPrefWidth(220);
+        return box;
+    }
+
+    /** Компактний StringConverter через лямбду (тільки toString). */
+    private <T> StringConverter<T> strConv(java.util.function.Function<T, String> fn) {
+        return new StringConverter<>() {
+            @Override public String toString(T v)       { return fn.apply(v); }
+            @Override public T fromString(String s)     { return null; }
+        };
+    }
+
     private void setStatus(String msg) { statusLabel.setText(msg); }
+
+    private void warn(String msg) { showAlert(Alert.AlertType.WARNING, "No selection", msg); }
+
+    private boolean confirm(String msg) {
+        Alert a = new Alert(Alert.AlertType.CONFIRMATION, msg, ButtonType.YES, ButtonType.NO);
+        a.setTitle("Confirm"); a.setHeaderText(null);
+        return a.showAndWait().orElse(ButtonType.NO) == ButtonType.YES;
+    }
 
     private void showAlert(Alert.AlertType type, String title, String msg) {
         Alert a = new Alert(type);
@@ -862,8 +789,9 @@ public class MainController {
         a.showAndWait();
     }
 
+    // ── Field factories ───────────────────────────────────────────
     private static TextField field(String value, String prompt) {
-        TextField tf = new TextField(value);
+        TextField tf = new TextField(value == null ? "" : value);
         tf.setPromptText(prompt);
         tf.setPrefWidth(220);
         return tf;
@@ -871,13 +799,20 @@ public class MainController {
 
     private static Label label(String text) {
         Label l = new Label(text);
-        l.setMinWidth(80);
+        l.setMinWidth(90);
         return l;
     }
 
-    private static String str(int v)          { return v == 0 ? "" : String.valueOf(v); }
-    private static int    parseIntOrZero(String s) {
-        try { return Integer.parseInt(s.trim()); } catch (NumberFormatException e) { return 0; }
+    // ── Value helpers ─────────────────────────────────────────────
+    private static String  str(int v)         { return v == 0 ? "" : String.valueOf(v); }
+    private static int     toInt(String s)    { try { return Integer.parseInt(s.trim()); } catch (NumberFormatException e) { return 0; } }
+    private static Integer parseIntOrZero(String s) {
+        if (s == null || s.isBlank()) return null;
+        try { return Integer.parseInt(s.trim()); } catch (NumberFormatException e) { return null; }
     }
     private static String coalesce(String s)  { return (s == null || s.isBlank()) ? null : s.trim(); }
+
+    // ── Validators ────────────────────────────────────────────────
+    private static boolean validYear(String s) { return s.isBlank() || s.trim().matches("\\d{1,4}"); }
+    private static boolean validInt (String s) { return s.isBlank() || s.trim().matches("\\d+"); }
 }
