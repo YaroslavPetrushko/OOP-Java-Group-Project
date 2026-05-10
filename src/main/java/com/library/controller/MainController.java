@@ -123,7 +123,7 @@ public class MainController {
         applyReadersFilter();
         applyLoansFilter();
 
-        setStatus("Connected ✅  |  CRUD ready");
+        setStatus("Connected ✅  |  Search & filters  ready");
     }
 
     // ════════════════════════════════════════════════════════════
@@ -183,6 +183,7 @@ public class MainController {
     private void onAddBook() {
         showBookDialog(null).ifPresent(book -> {
             bookDao.insert(book);
+            refreshBookFilters();
             applyBooksFilter();
             setStatus("Book \"" + book.getTitle() + "\" added.");
         });
@@ -191,41 +192,33 @@ public class MainController {
     @FXML
     private void onEditBook() {
         Book selected = booksTable.getSelectionModel().getSelectedItem();
-        if (selected == null) {
-            showAlert(Alert.AlertType.WARNING, "No selection",
-                    "Please select a book to edit.");
-            return;
-        }
-        showBookDialog(selected).ifPresent(updated -> {
-            updated.setId(selected.getId());
-            bookDao.update(updated);
+        if (selected == null) { warn("Select a book to edit."); return; }
+        showBookDialog(selected).ifPresent(b -> {
+            b.setId(selected.getId());
+            bookDao.update(b);
             applyBooksFilter();
-            setStatus("Book \"" + updated.getTitle() + "\" updated.");
+            setStatus("Book \"" + b.getTitle() + "\" updated.");
         });
     }
 
     @FXML
     private void onDeleteBook() {
         Book selected = booksTable.getSelectionModel().getSelectedItem();
-        if (selected == null) {
-            showAlert(Alert.AlertType.WARNING, "No selection",
-                    "Please select a book to delete.");
-            return;
+        if (selected == null) { warn("Select a book to delete."); return; }
+        if (confirm("Delete \"" + selected.getTitle() + "\"?")) {
+            bookDao.delete(selected.getId());
+            applyBooksFilter();
+            setStatus("Book deleted.");
         }
+    }
 
-        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION,
-                "Delete \"" + selected.getTitle() + "\"?\nThis action cannot be undone.",
-                ButtonType.YES, ButtonType.NO);
-        confirm.setTitle("Confirm deletion");
-        confirm.setHeaderText(null);
-
-        confirm.showAndWait().ifPresent(btn -> {
-            if (btn == ButtonType.YES) {
-                bookDao.delete(selected.getId());
-                applyBooksFilter();
-                setStatus("Book deleted.");
-            }
-        });
+    /** Оновлює список жанрів у фільтрі після додавання нової книги. */
+    private void refreshBookFilters() {
+        String current = bookGenreFilter.getValue();
+        bookGenreFilter.getItems().clear();
+        bookGenreFilter.getItems().add("");
+        bookGenreFilter.getItems().addAll(bookDao.findAllGenres());
+        bookGenreFilter.setValue(current != null ? current : "");
     }
 
     // ════════════════════════════════════════════════════════════
@@ -284,25 +277,6 @@ public class MainController {
         return dlg.showAndWait();
     }
 
-    // ── Dialog validation ─────────────────────────────────────────
-    private String validateBookForm(TextField titleField,
-                                    ComboBox<Author> authorBox,
-                                    TextField yearField,
-                                    TextField copiesField) {
-        StringBuilder sb = new StringBuilder();
-        if (titleField.getText().isBlank())
-            sb.append("• Title is required.\n");
-        if (authorBox.getValue() == null)
-            sb.append("• Author is required.\n");
-        String yr = yearField.getText().trim();
-        if (!yr.isEmpty() && !yr.matches("\\d{1,4}"))
-            sb.append("• Year must be a 1–4 digit number.\n");
-        String cp = copiesField.getText().trim();
-        if (!cp.isEmpty() && !cp.matches("\\d+"))
-            sb.append("• Copies must be a positive integer.\n");
-        return sb.toString();
-    }
-
     // ════════════════════════════════════════════════════════════
     //  AUTHORS — table setup
     // ════════════════════════════════════════════════════════════
@@ -329,10 +303,10 @@ public class MainController {
     }
 
     private void applyAuthorsFilter() {
-        String  text    = authorSearchField.getText();
-        String  country = authorCountryFilter.getValue();
-        Integer yearFrom   = parseIntOrZero(authorYearFrom.getText());
-        Integer yearTo     = parseIntOrZero(authorYearTo.getText());
+        String  text      = authorSearchField.getText();
+        String  country   = authorCountryFilter.getValue();
+        Integer yearFrom  = parseIntOrZero(authorYearFrom.getText());
+        Integer yearTo    = parseIntOrZero(authorYearTo.getText());
 
         authorsData.setAll(authorDao.search(text, country, yearFrom, yearTo));
         setStatus("Authors: " + authorsData.size() + " record(s) found.");
@@ -345,12 +319,14 @@ public class MainController {
         authorYearFrom.clear();
         authorYearTo.clear();
     }
+
     // ════════════════════════════════════════════════════════════
     //  AUTHORS — CRUD
     // ════════════════════════════════════════════════════════════
     @FXML private void onAddAuthor()    {
         showAuthorDialog(null).ifPresent(author -> {
             authorDao.insert(author);
+            refreshAuthorFilters();
             applyAuthorsFilter();
             setStatus("Author \"" + author.getFullName() + "\" added.");
         });
@@ -358,42 +334,37 @@ public class MainController {
 
     @FXML private void onEditAuthor()   {
         Author selected = authorsTable.getSelectionModel().getSelectedItem();
-        if (selected == null) {
-            showAlert(Alert.AlertType.WARNING, "No selection",
-                    "Select an author to edit.");
-            return;
-        }
-        showAuthorDialog(selected).ifPresent(updated -> {
-            updated.setId(selected.getId());
-            authorDao.update(updated);
+        if (selected == null) { warn("Select an author to edit."); return; }
+        showAuthorDialog(selected).ifPresent(a -> {
+            a.setId(selected.getId());
+            authorDao.update(a);
             applyAuthorsFilter();
-            setStatus("Author \"" + updated.getFullName() + "\" updated.");
+            setStatus("Author \"" + a.getFullName() + "\" updated.");
         });
     }
 
     @FXML private void onDeleteAuthor() {
         Author selected = authorsTable.getSelectionModel().getSelectedItem();
-        if (selected == null) {
-            showAlert(Alert.AlertType.WARNING, "No selection",
-                    "Please select an author to delete.");
-            return;
+        if (selected == null) { warn("Select an author to delete."); return; }
+        if (confirm("Delete \"" + selected.getFullName() + "\"?\n" +
+                "Cannot delete if the author has books in the library.")) {
+            authorDao.delete(selected.getId());
+            applyAuthorsFilter();
+            setStatus("Author deleted.");
         }
-
-        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION,
-                "Delete \"" + selected.getFullName() + "\"?\nThis action cannot be undone.",
-                ButtonType.YES, ButtonType.NO);
-        confirm.setTitle("Confirm deletion");
-        confirm.setHeaderText(null);
-
-        confirm.showAndWait().ifPresent(btn -> {
-            if (btn == ButtonType.YES) {
-                authorDao.delete(selected.getId());
-                applyAuthorsFilter();
-                setStatus("Author deleted.");
-            }
-        });
     }
 
+    private void refreshAuthorFilters() {
+        String cur = authorCountryFilter.getValue();
+        authorCountryFilter.getItems().clear();
+        authorCountryFilter.getItems().add("");
+        authorCountryFilter.getItems().addAll(authorDao.findAllCountries());
+        authorCountryFilter.setValue(cur != null ? cur : "");
+    }
+
+    // ════════════════════════════════════════════════════════════
+    //  Author — Add / Edit dialog
+    // ════════════════════════════════════════════════════════════
     private Optional<Author> showAuthorDialog(Author existing) {
         boolean edit = existing != null;
         Dialog<Author> dlg = dialog(edit ? "Edit Author" : "Add Author");
@@ -476,11 +447,7 @@ public class MainController {
 
     @FXML private void onEditReader()   {
         Reader selected = readersTable.getSelectionModel().getSelectedItem();
-        if (selected == null) {
-            showAlert(Alert.AlertType.WARNING, "No selection",
-                    "Please select a reader to edit.");
-            return;
-        }
+        if (selected == null) { warn("Select a reader to edit."); return; }
         showReaderDialog(selected).ifPresent(updated -> {
             updated.setId(selected.getId());
             readerDao.update(updated);
@@ -489,29 +456,21 @@ public class MainController {
         });
 
     }
+
     @FXML private void onDeleteReader() {
         Reader selected = readersTable.getSelectionModel().getSelectedItem();
-        if (selected == null) {
-            showAlert(Alert.AlertType.WARNING, "No selection",
-                    "Please select a reader to delete.");
-            return;
+        if (selected == null) { warn("Select a reader to delete."); return; }
+        if (confirm("Delete \"" + selected.getFullName() + "\"?\n" +
+                "Cannot delete if the reader has active loans.")) {
+            readerDao.delete(selected.getId());
+            applyReadersFilter();
+            setStatus("Reader deleted.");
         }
-
-        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION,
-                "Delete \"" + selected.getFullName() + "\"?\nThis action cannot be undone.",
-                ButtonType.YES, ButtonType.NO);
-        confirm.setTitle("Confirm deletion");
-        confirm.setHeaderText(null);
-
-        confirm.showAndWait().ifPresent(btn -> {
-            if (btn == ButtonType.YES) {
-                readerDao.delete(selected.getId());
-                applyReadersFilter();
-                setStatus("Reader deleted.");
-            }
-        });
     }
 
+    // ════════════════════════════════════════════════════════════
+    //  Reader — Add / Edit dialog
+    // ════════════════════════════════════════════════════════════
     private Optional<Reader> showReaderDialog(Reader existing) {
         boolean edit = existing != null;
         Dialog<Reader> dlg = dialog(edit ? "Edit Reader" : "Add Reader");
@@ -619,43 +578,32 @@ public class MainController {
             setStatus("Loan added.");
         });
     }
+
     @FXML private void onEditLoan()   {
         Loan selected = loansTable.getSelectionModel().getSelectedItem();
-        if (selected == null) {
-            showAlert(Alert.AlertType.WARNING, "No selection",
-                    "Please select a loan to edit.");
-            return;
-        }
-        showLoanDialog(selected).ifPresent(updated -> {
-            updated.setId(selected.getId());
-            loanDao.update(updated);
+        if (selected == null) { warn("Select a loan to edit."); return; }
+        showLoanDialog(selected).ifPresent(l -> {
+            l.setId(selected.getId());
+            loanDao.update(l);
             applyLoansFilter();
-            setStatus("Book updated.");
+            setStatus("Loan updated.");
         });
     }
+
     @FXML private void onDeleteLoan() {
         Loan selected = loansTable.getSelectionModel().getSelectedItem();
-        if (selected == null) {
-            showAlert(Alert.AlertType.WARNING, "No selection",
-                    "Please select a loan to delete.");
-            return;
+        if (selected == null) { warn("Select a loan to delete."); return; }
+        if (confirm("Delete loan #" + selected.getId() + "?\n\"" +
+                selected.getBookTitle() + "\" → " + selected.getReaderName())) {
+            loanDao.delete(selected.getId());
+            applyLoansFilter();
+            setStatus("Loan deleted.");
         }
-
-        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION,
-                "Delete \"" + selected.getId() + "\"?\nThis action cannot be undone.",
-                ButtonType.YES, ButtonType.NO);
-        confirm.setTitle("Confirm deletion");
-        confirm.setHeaderText(null);
-
-        confirm.showAndWait().ifPresent(btn -> {
-            if (btn == ButtonType.YES) {
-                loanDao.delete(selected.getId());
-                applyLoansFilter();
-                setStatus("Loan deleted.");
-            }
-        });
     }
 
+    // ════════════════════════════════════════════════════════════
+    //  Loan — Add / Edit dialog
+    // ════════════════════════════════════════════════════════════
     private Optional<Loan> showLoanDialog(Loan existing) {
         boolean edit = existing != null;
         Dialog<Loan> dlg = dialog(edit ? "Edit Loan" : "Add Loan");
