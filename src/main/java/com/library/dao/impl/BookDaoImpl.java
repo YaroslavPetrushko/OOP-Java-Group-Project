@@ -11,27 +11,32 @@ import java.util.Optional;
 
 public class BookDaoImpl implements BookDao {
 
+    // ── SQL ───────────────────────────────────────────────────────
     private static final String SELECT_BASE =
             "SELECT b.id, b.title, b.author_id, a.full_name AS author_name, " +
-                    "b.genre, b.isbn, b.pub_year, b.copies " +
-                    "FROM books b JOIN authors a ON a.id = b.author_id ";
+            "       b.genre, b.isbn, b.pub_year, b.copies " +
+            "FROM books b JOIN authors a ON a.id = b.author_id ";
 
-    private static final String FIND_ALL = SELECT_BASE + "ORDER BY b.title";
-    private static final String FIND_BY_TITLE = SELECT_BASE + "WHERE LOWER(b.title) LIKE LOWER(?) ORDER BY b.title";
+    private static final String FIND_ALL   = SELECT_BASE + "ORDER BY b.id";
     private static final String FIND_BY_ID = SELECT_BASE + "WHERE b.id = ?";
+
+    private static final String GENRES =
+            "SELECT DISTINCT genre FROM books " +
+            "WHERE genre IS NOT NULL ORDER BY genre";
 
     private static final String INSERT =
             "INSERT INTO books (title, author_id, genre, isbn, pub_year, copies) " +
-                    "VALUES (?, ?, ?, ?, ?, ?)";
+            "VALUES (?, ?, ?, ?, ?, ?)";
 
     private static final String UPDATE =
-            "UPDATE books SET title=?, author_id=?, genre=?, isbn=?, pub_year=?, copies=? WHERE id=?";
+            "UPDATE books " +
+            "SET title=?, author_id=?, genre=?, isbn=?, pub_year=?, copies=? " +
+            "WHERE id=?";
 
     private static final String DELETE = "DELETE FROM books WHERE id=?";
 
-    private Connection conn() {
-        return DBConnection.getInstance().getConnection();
-    }
+    // ── Helpers ───────────────────────────────────────────────────
+    private Connection conn() { return DBConnection.getInstance().getConnection(); }
 
     private Book mapRow(ResultSet rs) throws SQLException {
         return new Book(
@@ -41,37 +46,20 @@ public class BookDaoImpl implements BookDao {
                 rs.getString("author_name"),
                 rs.getString("genre"),
                 rs.getString("isbn"),
-                rs.getInt("pub_year"),   // дозволяє NULL
+                rs.getInt("pub_year"),
                 rs.getInt("copies")
         );
     }
 
+    // ── Read ──────────────────────────────────────────────────────
     @Override
     public List<Book> findAll() {
         List<Book> list = new ArrayList<>();
         try (PreparedStatement ps = conn().prepareStatement(FIND_ALL);
              ResultSet rs = ps.executeQuery()) {
-            while (rs.next()) {
-                list.add(mapRow(rs));
-            }
+            while (rs.next()) list.add(mapRow(rs));
         } catch (SQLException e) {
-            System.err.println("BookDaoImpl.findAll: " + e.getMessage());
-        }
-        return list;
-    }
-
-    @Override
-    public List<Book> findByTitle(String title) {
-        List<Book> list = new ArrayList<>();
-        try (PreparedStatement ps = conn().prepareStatement(FIND_BY_TITLE)) {
-            ps.setString(1, "%" + title.trim() + "%");
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    list.add(mapRow(rs));
-                }
-            }
-        } catch (SQLException e) {
-            System.err.println("BookDaoImpl.findByTitle: " + e.getMessage());
+            System.err.println("BookDao.findAll: " + e.getMessage());
         }
         return list;
     }
@@ -81,52 +69,91 @@ public class BookDaoImpl implements BookDao {
         try (PreparedStatement ps = conn().prepareStatement(FIND_BY_ID)) {
             ps.setInt(1, id);
             try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    return Optional.of(mapRow(rs));
-                }
+                if (rs.next()) return Optional.of(mapRow(rs));
             }
         } catch (SQLException e) {
-            System.err.println("BookDaoImpl.findById: " + e.getMessage());
+            System.err.println("BookDao.findById: " + e.getMessage());
         }
         return Optional.empty();
     }
 
     @Override
-    public void insert(Book book) {
-        try (PreparedStatement ps = conn().prepareStatement(INSERT, Statement.RETURN_GENERATED_KEYS)) {
-            ps.setString(1, book.getTitle());
-            ps.setInt(2, book.getAuthorId());
-            setNullableString(ps, 3, book.getGenre());
-            setNullableString(ps, 4, book.getIsbn());
-            setNullableInt(ps, 5, book.getPubYear());
-            ps.setInt(6, book.getCopies());
-
-            ps.executeUpdate();
-
-            try (ResultSet rs = ps.getGeneratedKeys()) {
-                if (rs.next()) {
-                    book.setId(rs.getInt(1));
-                }
-            }
+    public List<String> findAllGenres() {
+        List<String> list = new ArrayList<>();
+        try (PreparedStatement ps = conn().prepareStatement(GENRES);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) list.add(rs.getString(1));
         } catch (SQLException e) {
-            System.err.println("BookDaoImpl.insert: " + e.getMessage());
+            System.err.println("BookDao.findAllGenres: " + e.getMessage());
+        }
+        return list;
+    }
+
+    /**
+     * Динамічний пошук. Будуємо WHERE-рядок залежно від заповнених параметрів:
+     *   text     → LIKE в title та author full_name (одночасно OR)
+     *   genre    → точне співпадіння
+     *   yearFrom → pub_year >= yearFrom
+     *   yearTo   → pub_year <= yearTo
+     */
+    @Override
+    public List<Book> search(String text, String genre, Integer yearFrom, Integer yearTo) {
+        StringBuilder sql  = new StringBuilder(SELECT_BASE + "WHERE 1=1 ");
+        List<Object>  args = new ArrayList<>();
+
+        if (text != null && !text.isBlank()) {
+            sql.append("AND (LOWER(b.title) LIKE LOWER(?) " +
+                       "     OR LOWER(a.full_name) LIKE LOWER(?)) ");
+            String p = "%" + text.trim() + "%";
+            args.add(p);
+            args.add(p);
+        }
+        if (genre != null && !genre.isBlank()) {
+            sql.append("AND b.genre = ? ");
+            args.add(genre);
+        }
+        if (yearFrom != null && yearFrom > 0) {
+            sql.append("AND b.pub_year >= ? ");
+            args.add(yearFrom);
+        }
+        if (yearTo != null && yearTo > 0) {
+            sql.append("AND b.pub_year <= ? ");
+            args.add(yearTo);
+        }
+        sql.append("ORDER BY b.id");
+
+        return query(sql.toString(), args);
+    }
+
+    // ── Write ─────────────────────────────────────────────────────
+    @Override
+    public void insert(Book b) {
+        try (PreparedStatement ps = conn().prepareStatement(INSERT)) {
+            ps.setString(1, b.getTitle());
+            ps.setInt   (2, b.getAuthorId());
+            setNullableString(ps, 3, b.getGenre());
+            setNullableString(ps, 4, b.getIsbn());
+            setNullableInt   (ps, 5, b.getPubYear());
+            ps.setInt(6, b.getCopies());
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            System.err.println("BookDao.insert: " + e.getMessage());
         }
     }
 
     @Override
-    public void update(Book book) {
+    public void update(Book b) {
         try (PreparedStatement ps = conn().prepareStatement(UPDATE)) {
-            ps.setString(1, book.getTitle());
-            ps.setInt(2, book.getAuthorId());
-            setNullableString(ps, 3, book.getGenre());
-            setNullableString(ps, 4, book.getIsbn());
-            setNullableInt(ps, 5, book.getPubYear());
-            ps.setInt(6, book.getCopies());
-            ps.setInt(7, book.getId());
-
+            ps.setString(1, b.getTitle());
+            ps.setInt   (2, b.getAuthorId());
+            setNullableString(ps, 3, b.getGenre());
+            setNullableString(ps, 4, b.getIsbn());
+            setNullableInt   (ps, 5, b.getPubYear());
+            ps.setInt(6, b.getCopies());
+            ps.setInt(7, b.getId());
             ps.executeUpdate();
         } catch (SQLException e) {
-            System.err.println("BookDaoImpl.update: " + e.getMessage());
+            System.err.println("BookDao.update: " + e.getMessage());
         }
     }
 
@@ -136,24 +163,38 @@ public class BookDaoImpl implements BookDao {
             ps.setInt(1, id);
             ps.executeUpdate();
         } catch (SQLException e) {
-            System.err.println("BookDaoImpl.delete: " + e.getMessage());
+            System.err.println("BookDao.delete: " + e.getMessage());
         }
     }
 
-    // ── Допоміжні методи для NULL ─────────────────────────────────
-    private void setNullableString(PreparedStatement ps, int paramIndex, String value) throws SQLException {
-        if (value == null || value.trim().isEmpty()) {
-            ps.setNull(paramIndex, Types.VARCHAR);
-        } else {
-            ps.setString(paramIndex, value.trim());
+    // ── Internal ──────────────────────────────────────────────────
+    /** Виконує запит із довільним списком параметрів (String | Integer). */
+    private List<Book> query(String sql, List<Object> args) {
+        List<Book> list = new ArrayList<>();
+        try (PreparedStatement ps = conn().prepareStatement(sql)) {
+            for (int i = 0; i < args.size(); i++) {
+                Object v = args.get(i);
+                if (v instanceof String)  ps.setString(i + 1, (String)  v);
+                else if (v instanceof Integer) ps.setInt(i + 1, (Integer) v);
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) list.add(mapRow(rs));
+            }
+        } catch (SQLException e) {
+            System.err.println("BookDao.query: " + e.getMessage());
         }
+        return list;
     }
 
-    private void setNullableInt(PreparedStatement ps, int paramIndex, Integer value) throws SQLException {
-        if (value == null || value == 0) {
-            ps.setNull(paramIndex, Types.SMALLINT);
-        } else {
-            ps.setInt(paramIndex, value);
-        }
+    private void setNullableString(PreparedStatement ps, int i, String v)
+            throws SQLException {
+        if (v == null || v.isBlank()) ps.setNull(i, Types.VARCHAR);
+        else                          ps.setString(i, v);
+    }
+
+    private void setNullableInt(PreparedStatement ps, int i, int v)
+            throws SQLException {
+        if (v == 0) ps.setNull(i, Types.SMALLINT);
+        else        ps.setInt(i, v);
     }
 }
