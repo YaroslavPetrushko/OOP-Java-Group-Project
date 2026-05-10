@@ -9,15 +9,31 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * JDBC implementation of {@link AuthorDao}.
+ *
+ * <p>All queries are executed via {@link PreparedStatement} — no string
+ * concatenation is used anywhere in this class.
+ *
+ * <p>The {@link #search} method builds a dynamic WHERE clause at runtime
+ * from the provided filter arguments.
+ *
+ * <p>SQL state {@code 23503} (foreign-key violation) from PostgreSQL is caught
+ * in {@link #delete} and re-thrown as a descriptive {@link RuntimeException}
+ * so the controller layer can display a user-friendly error dialog.
+ */
 public class AuthorDaoImpl implements AuthorDao {
 
-    // ── SQL ───────────────────────────────────────────────────────
+    // ── SQL constants ─────────────────────────────────────────────
+
+    /** Base SELECT shared by all read methods. */
     private static final String SELECT_BASE =
             "SELECT id, full_name, country, birth_year FROM authors ";
 
     private static final String FIND_ALL   = SELECT_BASE + "ORDER BY full_name";
     private static final String FIND_BY_ID = SELECT_BASE + "WHERE id=?";
 
+    /** Distinct country values for the filter ComboBox. */
     private static final String COUNTRIES =
             "SELECT DISTINCT country FROM authors " +
             "WHERE country IS NOT NULL ORDER BY country";
@@ -31,6 +47,15 @@ public class AuthorDaoImpl implements AuthorDao {
     // ── Helpers ───────────────────────────────────────────────────
     private Connection conn() { return DBConnection.getInstance().getConnection(); }
 
+    // ── Row mapper ────────────────────────────────────────────────
+
+    /**
+     * Maps the current row of a {@link ResultSet} to an {@link Author} object.
+     *
+     * @param rs the result set positioned on the row to map
+     * @return a fully populated {@link Author}
+     * @throws SQLException if any column access fails
+     */
     private Author mapRow(ResultSet rs) throws SQLException {
         return new Author(
                 rs.getInt("id"),
@@ -41,6 +66,7 @@ public class AuthorDaoImpl implements AuthorDao {
     }
 
     // ── Read ──────────────────────────────────────────────────────
+
     @Override
     public List<Author> findAll() {
         List<Author> list = new ArrayList<>();
@@ -79,9 +105,13 @@ public class AuthorDaoImpl implements AuthorDao {
     }
 
     /**
-     * text   → LIKE в full_name, country та CAST(birth_year AS TEXT)
-     * country → точне співпадіння (окремий фільтр)
-     * yearFrom/yearTo → birth_year діапазон
+     * Builds and executes a dynamic WHERE clause.
+     *
+     * <p>The free-text term is matched case-insensitively against
+     * {@code full_name}, {@code country}, and the text representation
+     * of {@code birth_year} (so typing "1814" finds Shevchenko).
+     *
+     * {@inheritDoc}
      */
     @Override
     public List<Author> search(String text, String country,
@@ -114,6 +144,7 @@ public class AuthorDaoImpl implements AuthorDao {
     }
 
     // ── Write ─────────────────────────────────────────────────────
+
     @Override
     public void insert(Author a) {
         try (PreparedStatement ps = conn().prepareStatement(INSERT)) {
@@ -139,6 +170,14 @@ public class AuthorDaoImpl implements AuthorDao {
         }
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>If the author has books in the library, PostgreSQL raises SQL state
+     * {@code 23503}. This is caught and re-thrown as a {@link RuntimeException}
+     * with a human-readable message so the controller can show an error dialog
+     * instead of silently failing.
+     */
     @Override
     public void delete(int id) {
         try (PreparedStatement ps = conn().prepareStatement(DELETE)) {
@@ -149,7 +188,15 @@ public class AuthorDaoImpl implements AuthorDao {
         }
     }
 
-    // ── Internal ──────────────────────────────────────────────────
+    // ── Internal helpers ──────────────────────────────────────────
+
+    /**
+     * Executes a parameterized SELECT and maps all rows to {@link Author} objects.
+     *
+     * @param sql  the fully formed SQL query string
+     * @param args ordered list of bind values ({@link String} or {@link Integer})
+     * @return list of matched authors; never {@code null}
+     */
     private List<Author> query(String sql, List<Object> args) {
         List<Author> list = new ArrayList<>();
         try (PreparedStatement ps = conn().prepareStatement(sql)) {
@@ -167,12 +214,27 @@ public class AuthorDaoImpl implements AuthorDao {
         return list;
     }
 
+    /**
+     * Binds a {@link String} parameter or sets SQL NULL when blank.
+     *
+     * @param ps the prepared statement
+     * @param i  1-based parameter index
+     * @param v  string value; {@code null} or blank → SQL NULL
+     */
     private void setNullableString(PreparedStatement ps, int i, String v)
             throws SQLException {
         if (v == null || v.isBlank()) ps.setNull(i, Types.VARCHAR);
         else                          ps.setString(i, v);
     }
 
+    /**
+     * Binds an int parameter or sets SQL NULL when the value is {@code 0}
+     * (sentinel for "not set", following the model convention).
+     *
+     * @param ps the prepared statement
+     * @param i  1-based parameter index
+     * @param v  int value; {@code 0} → SQL NULL
+     */
     private void setNullableInt(PreparedStatement ps, int i, int v)
             throws SQLException {
         if (v == 0) ps.setNull(i, Types.SMALLINT);
