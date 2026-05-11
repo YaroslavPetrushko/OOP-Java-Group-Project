@@ -80,4 +80,16 @@ public interface LoanDao {
      * @return the number of rows updated
      */
     int markOverdue();
+
+    /** Counts loans for a given book. Used to build cascade-delete confirmation. */
+    int countByBookId(int bookId);
+
+    /** Counts loans for a given reader. Used to build cascade-delete confirmation. */
+    int countByReaderId(int readerId);
+
+    /** Deletes all loans for the given book. Must be called before deleting the book. */
+    void deleteByBookId(int bookId);
+
+    /** Deletes all loans for the given reader. Must be called before deleting the reader. */
+    void deleteByReaderId(int readerId);
 }

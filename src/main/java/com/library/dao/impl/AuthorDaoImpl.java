@@ -44,6 +44,8 @@ public class AuthorDaoImpl implements AuthorDao {
             "UPDATE authors SET full_name=?, country=?, birth_year=? WHERE id=?";
     private static final String DELETE = "DELETE FROM authors WHERE id=?";
 
+    private static final String FK_VIOLATION = "23503";
+
     // ── Helpers ───────────────────────────────────────────────────
     private Connection conn() { return DBConnection.getInstance().getConnection(); }
 
@@ -185,6 +187,12 @@ public class AuthorDaoImpl implements AuthorDao {
             ps.executeUpdate();
         } catch (SQLException e) {
             System.err.println("AuthorDao.delete: " + e.getMessage());
+            if (FK_VIOLATION.equals(e.getSQLState())) {
+                throw new RuntimeException(
+                        "Cannot delete this author — they still have books in the library.\n" +
+                                "Delete all related books first.", e);
+            }
+            throw new RuntimeException("Failed to delete author: " + e.getMessage(), e);
         }
     }
 

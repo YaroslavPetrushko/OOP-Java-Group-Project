@@ -35,6 +35,8 @@ public class BookDaoImpl implements BookDao {
 
     private static final String FIND_ALL   = SELECT_BASE + "ORDER BY b.id";
     private static final String FIND_BY_ID = SELECT_BASE + "WHERE b.id = ?";
+    private static final String FIND_BY_AUTHOR =
+            SELECT_BASE + "WHERE b.author_id = ? ORDER BY b.title";
 
     /** Distinct genres for the filter ComboBox. */
     private static final String GENRES =
@@ -110,6 +112,20 @@ public class BookDaoImpl implements BookDao {
             System.err.println("BookDao.findById: " + e.getMessage());
         }
         return Optional.empty();
+    }
+
+    @Override
+    public List<Book> findByAuthorId(int authorId) {
+        List<Book> list = new ArrayList<>();
+        try (PreparedStatement ps = conn().prepareStatement(FIND_BY_AUTHOR)) {
+            ps.setInt(1, authorId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) list.add(mapRow(rs));
+            }
+        } catch (SQLException e) {
+            System.err.println("BookDao.findByAuthorId: " + e.getMessage());
+        }
+        return list;
     }
 
     @Override
