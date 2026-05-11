@@ -21,11 +21,27 @@ import java.util.Optional;
 import java.util.function.Supplier;
 
 /**
- * Controller for MainView.fxml.
+ * JavaFX controller for {@code MainView.fxml}.
  *
- * Step 5 — Books CRUD.
- * Step 6 — Authors / Readers / Loans CRUD.
- * Step 7 — Multi-field search + filter bars for all four tabs.
+ * <p>Wires together the four main entity tabs (Books, Authors, Readers, Loans),
+ * each providing:
+ * <ul>
+ *   <li><strong>CRUD</strong> — Add / Edit / Delete via modal dialogs</li>
+ *   <li><strong>Live search</strong> — results update on each keystroke or
+ *       filter change (no explicit "Search" button)</li>
+ *   <li><strong>Filters</strong> — genre/country/status ComboBoxes and
+ *       year/date range fields</li>
+ * </ul>
+ *
+ * <p>All database access is delegated to the DAO layer; no SQL appears here.
+ * All dialogs perform client-side validation before allowing the OK action.
+ *
+ * <p>Architecture: {@code View (FXML) → MainController → DAO → PostgreSQL}
+ *
+ * @see BookDao
+ * @see AuthorDao
+ * @see ReaderDao
+ * @see LoanDao
  */
 public class MainController {
 
@@ -38,7 +54,7 @@ public class MainController {
     // ── Status bar ────────────────────────────────────────────────
     @FXML private Label statusLabel;
 
-    // ── Books ─────────────────────────────────────────────────────
+    // ── Books tab ─────────────────────────────────────────────────
     @FXML private TableView<Book>            booksTable;
     @FXML private TableColumn<Book, Integer> bookIdCol;
     @FXML private TableColumn<Book, String>  bookTitleCol;
@@ -56,7 +72,7 @@ public class MainController {
 
     private final ObservableList<Book> booksData = FXCollections.observableArrayList();
 
-    // ── Authors ──────────────────────────────────────────
+    // ── Authors tab ───────────────────────────────────────────────
     @FXML private TableView<Author>            authorsTable;
     @FXML private TableColumn<Author, Integer> authorIdCol;
     @FXML private TableColumn<Author, String>  authorNameCol;
@@ -71,7 +87,7 @@ public class MainController {
 
     private final ObservableList<Author> authorsData = FXCollections.observableArrayList();
 
-    // ── Readers ──────────────────────────────────────────
+    // ── Readers tab ───────────────────────────────────────────────
     @FXML private TableView<Reader>              readersTable;
     @FXML private TableColumn<Reader, Integer>   readerIdCol;
     @FXML private TableColumn<Reader, String>    readerNameCol;
@@ -86,7 +102,7 @@ public class MainController {
 
     private final ObservableList<Reader> readersData = FXCollections.observableArrayList();
 
-    // ── Loans ────────────────────────────────────────────
+    // ── Loans tab ─────────────────────────────────────────────────
     @FXML private TableView<Loan>              loansTable;
     @FXML private TableColumn<Loan, Integer>   loanIdCol;
     @FXML private TableColumn<Loan, String>    loanBookCol;
@@ -104,8 +120,16 @@ public class MainController {
     private final ObservableList<Loan> loansData = FXCollections.observableArrayList();
 
     // ════════════════════════════════════════════════════════════
-    //  Init
+    //  Initialization
     // ════════════════════════════════════════════════════════════
+
+    /**
+     * Called automatically by {@link javafx.fxml.FXMLLoader} after all
+     * {@code @FXML} fields have been injected.
+     *
+     * <p>Sets up cell-value factories, populates filter ComboBoxes from the
+     * database, attaches change listeners, and performs an initial data load.
+     */
     @FXML
     public void initialize() {
         setupBooksTable();
@@ -123,12 +147,16 @@ public class MainController {
         applyReadersFilter();
         applyLoansFilter();
 
-        setStatus("Connected ✅  |  Search & filters  ready");
+        setStatus("Connected ✅  |  Search & filters ready");
     }
 
     // ════════════════════════════════════════════════════════════
-    //  Books — table setup
+    //  BOOKS — table setup
     // ════════════════════════════════════════════════════════════
+
+    /**
+     * Binds {@link Book} properties to the corresponding table columns.
+     */
     private void setupBooksTable() {
         bookIdCol    .setCellValueFactory(d -> new SimpleIntegerProperty(d.getValue().getId()).asObject());
         bookTitleCol .setCellValueFactory(d -> new SimpleStringProperty(d.getValue().getTitle()));
@@ -141,44 +169,55 @@ public class MainController {
     }
 
     // ════════════════════════════════════════════════════════════
-    //  BOOKS — filters init & apply
+    //  BOOKS — filter init & apply
     // ════════════════════════════════════════════════════════════
+
+    /**
+     * Populates the genre ComboBox from the database and attaches
+     * change listeners so the table reacts immediately to any filter change.
+     */
     private void initBookFilters() {
-        // Genre ComboBox
-        bookGenreFilter.getItems().add("");          // sentinel for "all"
+        bookGenreFilter.getItems().add("");
         bookGenreFilter.getItems().addAll(bookDao.findAllGenres());
         bookGenreFilter.setValue("");
 
-        // Listeners - react to changes
         bookSearchField.textProperty() .addListener((o, p, n) -> applyBooksFilter());
         bookGenreFilter.valueProperty().addListener((o, p, n) -> applyBooksFilter());
         bookYearFrom   .textProperty() .addListener((o, p, n) -> applyBooksFilter());
         bookYearTo     .textProperty() .addListener((o, p, n) -> applyBooksFilter());
     }
 
-    // Read all books controls
+    /**
+     * Reads all active filter values and delegates to {@link BookDao#search}.
+     * Updates {@link #booksData} and the status bar with the result count.
+     */
     private void applyBooksFilter() {
-        String text  = bookSearchField.getText();
-        String genre = bookGenreFilter.getValue();
+        String  text     = bookSearchField.getText();
+        String  genre    = bookGenreFilter.getValue();
         Integer yearFrom = parseIntOrZero(bookYearFrom.getText());
-        Integer yearTo = parseIntOrZero(bookYearTo.getText());
+        Integer yearTo   = parseIntOrZero(bookYearTo.getText());
 
         booksData.setAll(bookDao.search(text, genre, yearFrom, yearTo));
         setStatus("Books: " + booksData.size() + " record(s) found.");
     }
 
+    /**
+     * Resets all book filter controls; change listeners trigger
+     * {@link #applyBooksFilter} automatically.
+     */
     @FXML
     private void onClearBooksFilter() {
         bookSearchField.clear();
         bookGenreFilter.setValue("");
         bookYearFrom.clear();
         bookYearTo.clear();
-        // listeners trigger applyBooksFilter automatically
     }
 
     // ════════════════════════════════════════════════════════════
-    //  Books — CRUD actions
+    //  BOOKS — CRUD actions
     // ════════════════════════════════════════════════════════════
+
+    /** Opens the Add Book dialog; inserts on OK. */
     @FXML
     private void onAddBook() {
         showBookDialog(null).ifPresent(book -> {
@@ -189,6 +228,7 @@ public class MainController {
         });
     }
 
+    /** Opens the Edit Book dialog pre-filled with the selected row; updates on OK. */
     @FXML
     private void onEditBook() {
         Book selected = booksTable.getSelectionModel().getSelectedItem();
@@ -201,6 +241,9 @@ public class MainController {
         });
     }
 
+    /**
+     * Confirms and deletes the selected book.
+     */
     @FXML
     private void onDeleteBook() {
         Book selected = booksTable.getSelectionModel().getSelectedItem();
@@ -212,7 +255,10 @@ public class MainController {
         }
     }
 
-    /** Оновлює список жанрів у фільтрі після додавання нової книги. */
+    /**
+     * Refreshes the genre ComboBox items after a new book has been added
+     * (the new book's genre may not yet be in the list).
+     */
     private void refreshBookFilters() {
         String current = bookGenreFilter.getValue();
         bookGenreFilter.getItems().clear();
@@ -222,12 +268,25 @@ public class MainController {
     }
 
     // ════════════════════════════════════════════════════════════
-    //  Books — Add / Edit dialog
+    //  BOOKS — Add / Edit dialog
     // ════════════════════════════════════════════════════════════
-    /**
-     * @param existing null → Add mode; non-null → Edit mode (pre-fills fields)
-     */
 
+    /**
+     * Builds and shows the Book dialog in Add or Edit mode.
+     *
+     * <p>Validation rules enforced before OK is accepted:
+     * <ul>
+     *   <li>Title — required (non-blank)</li>
+     *   <li>Author — required (ComboBox selection)</li>
+     *   <li>ISBN — if provided, must be 10 or 13 digits (hyphens allowed)</li>
+     *   <li>Pub. year — if provided, must be 1–4 digits</li>
+     *   <li>Copies — must be a positive integer</li>
+     *   <li>Year range — yearFrom ≤ yearTo when both are provided</li>
+     * </ul>
+     *
+     * @param existing {@code null} for Add mode; a populated {@link Book} for Edit mode
+     * @return an {@link Optional} containing the user-filled book, or empty on Cancel
+     */
     private Optional<Book> showBookDialog(Book existing) {
         boolean edit = existing != null;
         Dialog<Book> dlg = dialog(edit ? "Edit Book" : "Add Book");
@@ -235,7 +294,7 @@ public class MainController {
         GridPane g = grid();
         TextField titleF  = field(edit ? existing.getTitle()        : "", "Book title *");
         TextField genreF  = field(edit ? existing.getGenre()        : "", "Genre");
-        TextField isbnF   = field(edit ? existing.getIsbn()         : "", "ISBN");
+        TextField isbnF   = field(edit ? existing.getIsbn()         : "", "e.g. 978-0-06-088328-7");
         TextField yearF   = field(edit ? str(existing.getPubYear()) : "", "e.g. 2024");
         TextField copiesF = field(edit ? str(existing.getCopies())  : "1", "≥ 1");
 
@@ -280,6 +339,10 @@ public class MainController {
     // ════════════════════════════════════════════════════════════
     //  AUTHORS — table setup
     // ════════════════════════════════════════════════════════════
+
+    /**
+     * Binds {@link Author} properties to the corresponding table columns.
+     */
     private void setupAuthorsTable() {
         authorIdCol       .setCellValueFactory(d -> new SimpleIntegerProperty(d.getValue().getId()).asObject());
         authorNameCol     .setCellValueFactory(d -> new SimpleStringProperty(d.getValue().getFullName()));
@@ -289,8 +352,13 @@ public class MainController {
     }
 
     // ════════════════════════════════════════════════════════════
-    //  AUTHORS — filters init & apply
+    //  AUTHORS — filter init & apply
     // ════════════════════════════════════════════════════════════
+
+    /**
+     * Populates the country ComboBox from the database and attaches
+     * change listeners so the table reacts immediately to any filter change.
+     */
     private void initAuthorFilters() {
         authorCountryFilter.getItems().add("");
         authorCountryFilter.getItems().addAll(authorDao.findAllCountries());
@@ -302,6 +370,10 @@ public class MainController {
         authorYearTo        .textProperty() .addListener((o, p, n) -> applyAuthorsFilter());
     }
 
+    /**
+     * Reads all active filter values and delegates to {@link AuthorDao#search}.
+     * Updates {@link #authorsData} and the status bar with the result count.
+     */
     private void applyAuthorsFilter() {
         String  text      = authorSearchField.getText();
         String  country   = authorCountryFilter.getValue();
@@ -312,6 +384,10 @@ public class MainController {
         setStatus("Authors: " + authorsData.size() + " record(s) found.");
     }
 
+    /**
+     * Resets all author filter controls; change listeners trigger
+     * {@link #applyAuthorsFilter} automatically.
+     */
     @FXML
     private void onClearAuthorsFilter() {
         authorSearchField.clear();
@@ -321,9 +397,12 @@ public class MainController {
     }
 
     // ════════════════════════════════════════════════════════════
-    //  AUTHORS — CRUD
+    //  AUTHORS — CRUD actions
     // ════════════════════════════════════════════════════════════
-    @FXML private void onAddAuthor()    {
+
+    /** Opens the Add Author dialog; inserts on OK. */
+    @FXML
+    private void onAddAuthor() {
         showAuthorDialog(null).ifPresent(author -> {
             authorDao.insert(author);
             refreshAuthorFilters();
@@ -332,7 +411,9 @@ public class MainController {
         });
     }
 
-    @FXML private void onEditAuthor()   {
+    /** Opens the Edit Author dialog pre-filled with the selected row; updates on OK. */
+    @FXML
+    private void onEditAuthor() {
         Author selected = authorsTable.getSelectionModel().getSelectedItem();
         if (selected == null) { warn("Select an author to edit."); return; }
         showAuthorDialog(selected).ifPresent(a -> {
@@ -343,7 +424,14 @@ public class MainController {
         });
     }
 
-    @FXML private void onDeleteAuthor() {
+    /**
+     * Confirms and deletes the selected author.
+     *
+     * <p>If the author still has books in the library, the DAO throws a
+     * {@link RuntimeException} which is displayed as an error dialog.
+     */
+    @FXML
+    private void onDeleteAuthor() {
         Author selected = authorsTable.getSelectionModel().getSelectedItem();
         if (selected == null) { warn("Select an author to delete."); return; }
         if (confirm("Delete \"" + selected.getFullName() + "\"?\n" +
@@ -354,6 +442,9 @@ public class MainController {
         }
     }
 
+    /**
+     * Refreshes the country ComboBox items after a new author has been added.
+     */
     private void refreshAuthorFilters() {
         String cur = authorCountryFilter.getValue();
         authorCountryFilter.getItems().clear();
@@ -363,8 +454,22 @@ public class MainController {
     }
 
     // ════════════════════════════════════════════════════════════
-    //  Author — Add / Edit dialog
+    //  AUTHORS — Add / Edit dialog
     // ════════════════════════════════════════════════════════════
+
+    /**
+     * Builds and shows the Author dialog in Add or Edit mode.
+     *
+     * <p>Validation rules enforced before OK is accepted:
+     * <ul>
+     *   <li>Full name — required (non-blank)</li>
+     *   <li>Birth year — if provided, must be 1–4 digits</li>
+     *   <li>Year range — yearFrom ≤ yearTo when both are provided in filters</li>
+     * </ul>
+     *
+     * @param existing {@code null} for Add mode; a populated {@link Author} for Edit mode
+     * @return an {@link Optional} containing the user-filled author, or empty on Cancel
+     */
     private Optional<Author> showAuthorDialog(Author existing) {
         boolean edit = existing != null;
         Dialog<Author> dlg = dialog(edit ? "Edit Author" : "Add Author");
@@ -400,6 +505,10 @@ public class MainController {
     // ════════════════════════════════════════════════════════════
     //  READERS — table setup
     // ════════════════════════════════════════════════════════════
+
+    /**
+     * Binds {@link Reader} properties to the corresponding table columns.
+     */
     private void setupReadersTable() {
         readerIdCol     .setCellValueFactory(d -> new SimpleIntegerProperty(d.getValue().getId()).asObject());
         readerNameCol   .setCellValueFactory(d -> new SimpleStringProperty(d.getValue().getFullName()));
@@ -410,14 +519,23 @@ public class MainController {
     }
 
     // ════════════════════════════════════════════════════════════
-    //  READERS — filters init & apply
+    //  READERS — filter init & apply
     // ════════════════════════════════════════════════════════════
+
+    /**
+     * Attaches change listeners to reader filter controls so the table
+     * reacts immediately to any change.
+     */
     private void initReaderFilters() {
         readerSearchField.textProperty()   .addListener((o, p, n) -> applyReadersFilter());
         readerRegFrom    .valueProperty()  .addListener((o, p, n) -> applyReadersFilter());
         readerRegTo      .valueProperty()  .addListener((o, p, n) -> applyReadersFilter());
     }
 
+    /**
+     * Reads all active filter values and delegates to {@link ReaderDao#search}.
+     * Updates {@link #readersData} and the status bar with the result count.
+     */
     private void applyReadersFilter() {
         String    text  = readerSearchField.getText();
         LocalDate from  = readerRegFrom.getValue();
@@ -427,6 +545,10 @@ public class MainController {
         setStatus("Readers: " + readersData.size() + " record(s) found.");
     }
 
+    /**
+     * Resets all reader filter controls; change listeners trigger
+     * {@link #applyReadersFilter} automatically.
+     */
     @FXML
     private void onClearReadersFilter() {
         readerSearchField.clear();
@@ -435,9 +557,12 @@ public class MainController {
     }
 
     // ════════════════════════════════════════════════════════════
-    //  READERS — CRUD
+    //  READERS — CRUD actions
     // ════════════════════════════════════════════════════════════
-    @FXML private void onAddReader()    {
+
+    /** Opens the Add Reader dialog; inserts on OK. */
+    @FXML
+    private void onAddReader() {
         showReaderDialog(null).ifPresent(reader -> {
             readerDao.insert(reader);
             applyReadersFilter();
@@ -445,7 +570,9 @@ public class MainController {
         });
     }
 
-    @FXML private void onEditReader()   {
+    /** Opens the Edit Reader dialog pre-filled with the selected row; updates on OK. */
+    @FXML
+    private void onEditReader() {
         Reader selected = readersTable.getSelectionModel().getSelectedItem();
         if (selected == null) { warn("Select a reader to edit."); return; }
         showReaderDialog(selected).ifPresent(updated -> {
@@ -454,10 +581,16 @@ public class MainController {
             applyReadersFilter();
             setStatus("Reader \"" + updated.getFullName() + "\" updated.");
         });
-
     }
 
-    @FXML private void onDeleteReader() {
+    /**
+     * Confirms and deletes the selected reader.
+     *
+     * <p>If the reader still has loan records, the DAO throws a
+     * {@link RuntimeException} which is displayed as an error dialog.
+     */
+    @FXML
+    private void onDeleteReader() {
         Reader selected = readersTable.getSelectionModel().getSelectedItem();
         if (selected == null) { warn("Select a reader to delete."); return; }
         if (confirm("Delete \"" + selected.getFullName() + "\"?\n" +
@@ -469,8 +602,24 @@ public class MainController {
     }
 
     // ════════════════════════════════════════════════════════════
-    //  Reader — Add / Edit dialog
+    //  READERS — Add / Edit dialog
     // ════════════════════════════════════════════════════════════
+
+    /**
+     * Builds and shows the Reader dialog in Add or Edit mode.
+     *
+     * <p>Validation rules enforced before OK is accepted:
+     * <ul>
+     *   <li>Full name — required (non-blank)</li>
+     *   <li>Email — if provided, must match a basic {@code name@domain.tld} pattern</li>
+     *   <li>Phone — if provided, must contain 7–15 digits (spaces, hyphens, parentheses
+     *               and a leading {@code +} are allowed)</li>
+     *   <li>Registration date — required</li>
+     * </ul>
+     *
+     * @param existing {@code null} for Add mode; a populated {@link Reader} for Edit mode
+     * @return an {@link Optional} containing the user-filled reader, or empty on Cancel
+     */
     private Optional<Reader> showReaderDialog(Reader existing) {
         boolean edit = existing != null;
         Dialog<Reader> dlg = dialog(edit ? "Edit Reader" : "Add Reader");
@@ -510,6 +659,12 @@ public class MainController {
     // ════════════════════════════════════════════════════════════
     //  LOANS — table setup
     // ════════════════════════════════════════════════════════════
+
+    /**
+     * Binds {@link Loan} properties to the corresponding table columns.
+     * The status column uses a custom cell factory to colour-code the text:
+     * green for {@code active}, red for {@code overdue}, grey for {@code returned}.
+     */
     private void setupLoansTable() {
         loanIdCol    .setCellValueFactory(d -> new SimpleIntegerProperty(d.getValue().getId()).asObject());
         loanBookCol  .setCellValueFactory(d -> new SimpleStringProperty(d.getValue().getBookTitle()));
@@ -518,7 +673,7 @@ public class MainController {
         loanDueCol   .setCellValueFactory(d -> new SimpleObjectProperty<>(d.getValue().getDueDate()));
         loanStatusCol.setCellValueFactory(d -> new SimpleStringProperty(d.getValue().getStatus()));
 
-        // colour-code status
+        // Colour-code the status column for quick visual scanning
         loanStatusCol.setCellFactory(col -> new TableCell<>() {
             @Override
             protected void updateItem(String item, boolean empty) {
@@ -538,8 +693,13 @@ public class MainController {
     }
 
     // ════════════════════════════════════════════════════════════
-    //  LOANS — filters init & apply
+    //  LOANS — filter init & apply
     // ════════════════════════════════════════════════════════════
+
+    /**
+     * Populates the status ComboBox and attaches change listeners so the
+     * table reacts immediately to any filter change.
+     */
     private void initLoanFilters() {
         loanStatusFilter.getItems().addAll("", "active", "returned", "overdue");
         loanStatusFilter.setValue("");
@@ -550,6 +710,10 @@ public class MainController {
         loanDateTo      .valueProperty().addListener((o, p, n) -> applyLoansFilter());
     }
 
+    /**
+     * Reads all active filter values and delegates to {@link LoanDao#search}.
+     * Updates {@link #loansData} and the status bar with the result count.
+     */
     private void applyLoansFilter() {
         String    text   = loanSearchField.getText();
         String    status = loanStatusFilter.getValue();
@@ -560,6 +724,10 @@ public class MainController {
         setStatus("Loans: " + loansData.size() + " record(s) found.");
     }
 
+    /**
+     * Resets all loan filter controls; change listeners trigger
+     * {@link #applyLoansFilter} automatically.
+     */
     @FXML
     private void onClearLoansFilter() {
         loanSearchField.clear();
@@ -569,9 +737,12 @@ public class MainController {
     }
 
     // ════════════════════════════════════════════════════════════
-    //  LOANS — CRUD
+    //  LOANS — CRUD actions
     // ════════════════════════════════════════════════════════════
-    @FXML private void onAddLoan()    {
+
+    /** Opens the Add Loan dialog; inserts on OK. */
+    @FXML
+    private void onAddLoan() {
         showLoanDialog(null).ifPresent(loan -> {
             loanDao.insert(loan);
             applyLoansFilter();
@@ -579,7 +750,9 @@ public class MainController {
         });
     }
 
-    @FXML private void onEditLoan()   {
+    /** Opens the Edit Loan dialog pre-filled with the selected row; updates on OK. */
+    @FXML
+    private void onEditLoan() {
         Loan selected = loansTable.getSelectionModel().getSelectedItem();
         if (selected == null) { warn("Select a loan to edit."); return; }
         showLoanDialog(selected).ifPresent(l -> {
@@ -590,7 +763,9 @@ public class MainController {
         });
     }
 
-    @FXML private void onDeleteLoan() {
+    /** Confirms and deletes the selected loan. */
+    @FXML
+    private void onDeleteLoan() {
         Loan selected = loansTable.getSelectionModel().getSelectedItem();
         if (selected == null) { warn("Select a loan to delete."); return; }
         if (confirm("Delete loan #" + selected.getId() + "?\n\"" +
@@ -602,8 +777,22 @@ public class MainController {
     }
 
     // ════════════════════════════════════════════════════════════
-    //  Loan — Add / Edit dialog
+    //  LOANS — Add / Edit dialog
     // ════════════════════════════════════════════════════════════
+
+    /**
+     * Builds and shows the Loan dialog in Add or Edit mode.
+     *
+     * <p>Validation rules enforced before OK is accepted:
+     * <ul>
+     *   <li>Book — required (ComboBox selection)</li>
+     *   <li>Reader — required (ComboBox selection)</li>
+     *   <li>Due date — required and must be on or after the loan date</li>
+     * </ul>
+     *
+     * @param existing {@code null} for Add mode; a populated {@link Loan} for Edit mode
+     * @return an {@link Optional} containing the user-filled loan, or empty on Cancel
+     */
     private Optional<Loan> showLoanDialog(Loan existing) {
         boolean edit = existing != null;
         Dialog<Loan> dlg = dialog(edit ? "Edit Loan" : "Add Loan");
@@ -672,10 +861,17 @@ public class MainController {
     }
 
     // ════════════════════════════════════════════════════════════
-    //  Utilities
+    //  Shared UI helpers
     // ════════════════════════════════════════════════════════════
 
-    // ── Shared UI helpers ───────────────────────────────────────────
+    /**
+     * Creates a generic {@link Dialog} with OK and Cancel buttons
+     * and no header text.
+     *
+     * @param title dialog window title
+     * @param <T>   result type of the dialog
+     * @return a configured but not yet shown dialog
+     */
     private <T> Dialog<T> dialog(String title) {
         Dialog<T> dlg = new Dialog<>();
         dlg.setTitle(title);
@@ -684,6 +880,12 @@ public class MainController {
         return dlg;
     }
 
+    /**
+     * Creates a {@link GridPane} with standard padding and gap settings
+     * used by all Add/Edit dialogs.
+     *
+     * @return a configured {@link GridPane}
+     */
     private GridPane grid() {
         GridPane g = new GridPane();
         g.setHgap(12); g.setVgap(10);
@@ -691,6 +893,17 @@ public class MainController {
         return g;
     }
 
+    /**
+     * Attaches a validation filter to the OK button of a dialog.
+     *
+     * <p>When the user clicks OK, the {@code validator} is called. If it
+     * returns a non-empty string, the action is consumed (dialog stays open)
+     * and an error alert is shown listing all validation failures.
+     *
+     * @param dlg       the dialog whose OK button to guard
+     * @param validator a supplier that returns an empty string on success,
+     *                  or a newline-separated list of error messages on failure
+     */
     private void okFilter(Dialog<?> dlg, Supplier<String> validator) {
         Button ok = (Button) dlg.getDialogPane().lookupButton(ButtonType.OK);
         ok.addEventFilter(ActionEvent.ACTION, ev -> {
@@ -702,6 +915,11 @@ public class MainController {
         });
     }
 
+    /**
+     * Creates an {@link Author} ComboBox populated with all authors from the database.
+     *
+     * @return a configured, ready-to-use ComboBox
+     */
     private ComboBox<Author> authorComboBox() {
         ComboBox<Author> box = new ComboBox<>(
                 FXCollections.observableArrayList(authorDao.findAll()));
@@ -711,7 +929,14 @@ public class MainController {
         return box;
     }
 
-    /** Компактний StringConverter через лямбду (тільки toString). */
+    /**
+     * Creates a lightweight {@link StringConverter} from a single
+     * {@code toString} lambda (the {@code fromString} direction is unused).
+     *
+     * @param fn function mapping an item to its display string
+     * @param <T> item type
+     * @return a {@link StringConverter} backed by {@code fn}
+     */
     private <T> StringConverter<T> strConv(java.util.function.Function<T, String> fn) {
         return new StringConverter<>() {
             @Override public String toString(T v)       { return fn.apply(v); }
@@ -719,16 +944,41 @@ public class MainController {
         };
     }
 
+    /**
+     * Updates the status bar label with the given message.
+     *
+     * @param msg the message to display
+     */
     private void setStatus(String msg) { statusLabel.setText(msg); }
 
-    private void warn(String msg) { showAlert(Alert.AlertType.WARNING, "No selection", msg); }
+    /**
+     * Shows a WARNING alert for "no row selected" situations.
+     *
+     * @param msg the message to display
+     */
+    private void warn(String msg) {
+        showAlert(Alert.AlertType.WARNING, "No selection", msg);
+    }
 
+    /**
+     * Shows a YES/NO confirmation dialog.
+     *
+     * @param msg the confirmation question
+     * @return {@code true} if the user clicked YES
+     */
     private boolean confirm(String msg) {
         Alert a = new Alert(Alert.AlertType.CONFIRMATION, msg, ButtonType.YES, ButtonType.NO);
         a.setTitle("Confirm"); a.setHeaderText(null);
         return a.showAndWait().orElse(ButtonType.NO) == ButtonType.YES;
     }
 
+    /**
+     * Shows a generic alert dialog.
+     *
+     * @param type  alert type (ERROR, WARNING, INFORMATION, etc.)
+     * @param title window title
+     * @param msg   message body
+     */
     private void showAlert(Alert.AlertType type, String title, String msg) {
         Alert a = new Alert(type);
         a.setTitle(title);
@@ -737,7 +987,17 @@ public class MainController {
         a.showAndWait();
     }
 
-    // ── Field factories ───────────────────────────────────────────
+    // ════════════════════════════════════════════════════════════
+    //  Field factory helpers
+    // ════════════════════════════════════════════════════════════
+
+    /**
+     * Creates a styled {@link TextField} with a preset value and prompt text.
+     *
+     * @param value  initial value (may be blank)
+     * @param prompt placeholder text shown when the field is empty
+     * @return a configured {@link TextField} with {@code prefWidth = 220}
+     */
     private static TextField field(String value, String prompt) {
         TextField tf = new TextField(value == null ? "" : value);
         tf.setPromptText(prompt);
@@ -745,19 +1005,63 @@ public class MainController {
         return tf;
     }
 
+    /**
+     * Creates a right-aligned {@link Label} with a fixed minimum width,
+     * used as a form row label in dialog grids.
+     *
+     * @param text label text
+     * @return a configured {@link Label}
+     */
     private static Label label(String text) {
         Label l = new Label(text);
         l.setMinWidth(90);
         return l;
     }
 
-    // ── Value helpers ─────────────────────────────────────────────
+    // ════════════════════════════════════════════════════════════
+    //  Value conversion helpers
+    // ════════════════════════════════════════════════════════════
+
+    /**
+     * Converts an int to a display string, returning an empty string for {@code 0}
+     * (the "not set" sentinel used in the models).
+     *
+     * @param v the integer value
+     * @return {@code ""} if {@code v == 0}, otherwise {@code String.valueOf(v)}
+     */
     private static String  str(int v)         { return v == 0 ? "" : String.valueOf(v); }
-    private static int     toInt(String s)    { try { return Integer.parseInt(s.trim()); } catch (NumberFormatException e) { return 0; } }
+
+    /**
+     * Parses a string to int, returning {@code 0} on blank or invalid input.
+     *
+     * @param s the string to parse
+     * @return the parsed integer, or {@code 0}
+     */
+    private static int toInt(String s) {
+        try { return Integer.parseInt(s.trim()); }
+        catch (NumberFormatException e) { return 0; }
+    }
+
+    /**
+     * Parses a string to an {@link Integer}, returning {@code null} on blank
+     * or invalid input (used for optional filter range bounds).
+     *
+     * @param s the string to parse
+     * @return the parsed integer, or {@code null}
+     */
     private static Integer parseIntOrZero(String s) {
         if (s == null || s.isBlank()) return null;
-        try { return Integer.parseInt(s.trim()); } catch (NumberFormatException e) { return null; }
+        try { return Integer.parseInt(s.trim()); }
+        catch (NumberFormatException e) { return null; }
     }
+
+    /**
+     * Trims and returns the string, or {@code null} if it is blank.
+     * Used to map empty dialog fields to SQL NULL.
+     *
+     * @param s the string value
+     * @return trimmed string, or {@code null}
+     */
     private static String coalesce(String s)  { return (s == null || s.isBlank()) ? null : s.trim(); }
 
     // ── Validators ────────────────────────────────────────────────
