@@ -140,10 +140,10 @@ public class BookDaoImpl implements BookDao {
 
         if (text != null && !text.isBlank()) {
             sql.append("AND (LOWER(b.title) LIKE LOWER(?) " +
-                       "     OR LOWER(a.full_name) LIKE LOWER(?)) ");
+                    "     OR LOWER(a.full_name) LIKE LOWER(?) " +
+                    "     OR LOWER(COALESCE(b.isbn,'')) LIKE LOWER(?)) ");
             String p = "%" + text.trim() + "%";
-            args.add(p);
-            args.add(p);
+			args.add(p); args.add(p); args.add(p);
         }
         if (genre != null && !genre.isBlank()) {
             sql.append("AND b.genre = ? ");
