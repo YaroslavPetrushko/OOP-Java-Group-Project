@@ -46,6 +46,9 @@ public class LoanDaoImpl implements LoanDao {
             "UPDATE loans SET book_id=?, reader_id=?, loan_date=?, due_date=?, status=? " +
             "WHERE id=?";
     private static final String DELETE = "DELETE FROM loans WHERE id=?";
+    private static final String MARK_OVERDUE =
+            "UPDATE loans SET status = 'overdue' " +
+                    "WHERE status = 'active' AND due_date < CURRENT_DATE";
 
     // ── Connection helper ─────────────────────────────────────────
 
@@ -192,6 +195,17 @@ public class LoanDaoImpl implements LoanDao {
         }
     }
 
+    @Override
+    public int markOverdue() {
+        try (PreparedStatement ps = conn().prepareStatement(MARK_OVERDUE)) {
+            int count = ps.executeUpdate();
+            if (count > 0) System.out.println("LoanDao.markOverdue: " + count + " loan(s) updated.");
+            return count;
+        } catch (SQLException e) {
+            System.err.println("LoanDao.markOverdue: " + e.getMessage());
+            return 0;
+        }
+    }
     // ── Internal helpers ──────────────────────────────────────────
 
     /**

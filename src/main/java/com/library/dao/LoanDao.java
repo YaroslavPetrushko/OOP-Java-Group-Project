@@ -72,4 +72,12 @@ public interface LoanDao {
      * @throws RuntimeException wrapping any unexpected {@link java.sql.SQLException}
      */
     void delete(int id);
+
+    /**
+     * Sets status to {@code "overdue"} for all active loans whose
+     * {@code due_date} is before today. Called once on application startup.
+     *
+     * @return the number of rows updated
+     */
+    int markOverdue();
 }
