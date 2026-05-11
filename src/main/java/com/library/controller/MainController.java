@@ -64,7 +64,6 @@ public class MainController {
     @FXML private TableColumn<Book, Integer> bookYearCol;
     @FXML private TableColumn<Book, Integer> bookCopiesCol;
 
-    // search + filters
     @FXML private TextField        bookSearchField;
     @FXML private ComboBox<String> bookGenreFilter;
     @FXML private TextField        bookYearFrom;
@@ -79,7 +78,6 @@ public class MainController {
     @FXML private TableColumn<Author, String>  authorCountryCol;
     @FXML private TableColumn<Author, Integer> authorBirthYearCol;
 
-    // search + filters
     @FXML private TextField        authorSearchField;
     @FXML private ComboBox<String> authorCountryFilter;
     @FXML private TextField        authorYearFrom;
@@ -95,7 +93,6 @@ public class MainController {
     @FXML private TableColumn<Reader, String>    readerPhoneCol;
     @FXML private TableColumn<Reader, LocalDate> readerRegDateCol;
 
-    // search + filters
     @FXML private TextField  readerSearchField;
     @FXML private DatePicker readerRegFrom;
     @FXML private DatePicker readerRegTo;
@@ -111,7 +108,6 @@ public class MainController {
     @FXML private TableColumn<Loan, LocalDate> loanDueCol;
     @FXML private TableColumn<Loan, String>    loanStatusCol;
 
-    // search + filters
     @FXML private TextField        loanSearchField;
     @FXML private ComboBox<String> loanStatusFilter;
     @FXML private DatePicker       loanDateFrom;
@@ -194,8 +190,8 @@ public class MainController {
     private void applyBooksFilter() {
         String  text     = bookSearchField.getText();
         String  genre    = bookGenreFilter.getValue();
-        Integer yearFrom = parseIntOrZero(bookYearFrom.getText());
-        Integer yearTo   = parseIntOrZero(bookYearTo.getText());
+        Integer yearFrom = parseIntOrNull(bookYearFrom.getText());
+        Integer yearTo   = parseIntOrNull(bookYearTo.getText());
 
         booksData.setAll(bookDao.search(text, genre, yearFrom, yearTo));
         setStatus("Books: " + booksData.size() + " record(s) found.");
@@ -221,10 +217,14 @@ public class MainController {
     @FXML
     private void onAddBook() {
         showBookDialog(null).ifPresent(book -> {
-            bookDao.insert(book);
-            refreshBookFilters();
-            applyBooksFilter();
-            setStatus("Book \"" + book.getTitle() + "\" added.");
+            try {
+                bookDao.insert(book);
+                refreshBookFilters();
+                applyBooksFilter();
+                setStatus("Book \"" + book.getTitle() + "\" added.");
+            } catch (RuntimeException e) {
+                showAlert(Alert.AlertType.ERROR, "Database error", e.getMessage());
+            }
         });
     }
 
@@ -234,24 +234,36 @@ public class MainController {
         Book selected = booksTable.getSelectionModel().getSelectedItem();
         if (selected == null) { warn("Select a book to edit."); return; }
         showBookDialog(selected).ifPresent(b -> {
-            b.setId(selected.getId());
-            bookDao.update(b);
-            applyBooksFilter();
-            setStatus("Book \"" + b.getTitle() + "\" updated.");
+            try {
+                b.setId(selected.getId());
+                bookDao.update(b);
+                applyBooksFilter();
+                setStatus("Book \"" + b.getTitle() + "\" updated.");
+            } catch (RuntimeException e) {
+                showAlert(Alert.AlertType.ERROR, "Database error", e.getMessage());
+            }
         });
     }
 
     /**
      * Confirms and deletes the selected book.
+     *
+     * <p>If the book is referenced by loans, the DAO throws a
+     * {@link RuntimeException} with a descriptive message that is shown
+     * to the user as an error dialog.
      */
     @FXML
     private void onDeleteBook() {
         Book selected = booksTable.getSelectionModel().getSelectedItem();
         if (selected == null) { warn("Select a book to delete."); return; }
         if (confirm("Delete \"" + selected.getTitle() + "\"?")) {
-            bookDao.delete(selected.getId());
-            applyBooksFilter();
-            setStatus("Book deleted.");
+            try {
+                bookDao.delete(selected.getId());
+                applyBooksFilter();
+                setStatus("Book deleted.");
+            } catch (RuntimeException e) {
+                showAlert(Alert.AlertType.ERROR, "Cannot delete", e.getMessage());
+            }
         }
     }
 
@@ -312,12 +324,15 @@ public class MainController {
         dlg.getDialogPane().setContent(g);
 
         okFilter(dlg, () -> {
-            String e = "";
-            if (titleF.getText().isBlank())   e += "• Title is required.\n";
-            if (authorBox.getValue() == null) e += "• Author is required.\n";
-            if (!validYear(yearF.getText()))  e += "• Year must be 1–4 digits.\n";
-            if (!validInt(copiesF.getText())) e += "• Copies must be a positive integer.\n";
-            return e;
+            StringBuilder e = new StringBuilder();
+            if (titleF.getText().isBlank())   e.append("• Title is required.\n");
+            if (authorBox.getValue() == null) e.append("• Author is required.\n");
+            if (!isbnF.getText().isBlank() && !validIsbn(isbnF.getText()))
+                e.append("• ISBN must be 10 or 13 digits (hyphens allowed).\n");
+            if (!validYear(yearF.getText()))  e.append("• Publication year must be 1–4 digits.\n");
+            if (!validPositiveInt(copiesF.getText()))
+                e.append("• Copies must be a positive integer (≥ 1).\n");
+            return e.toString();
         });
 
         dlg.setResultConverter(btn -> {
@@ -364,10 +379,10 @@ public class MainController {
         authorCountryFilter.getItems().addAll(authorDao.findAllCountries());
         authorCountryFilter.setValue("");
 
-        authorSearchField   .textProperty() .addListener((o, p, n) -> applyAuthorsFilter());
-        authorCountryFilter .valueProperty().addListener((o, p, n) -> applyAuthorsFilter());
-        authorYearFrom      .textProperty() .addListener((o, p, n) -> applyAuthorsFilter());
-        authorYearTo        .textProperty() .addListener((o, p, n) -> applyAuthorsFilter());
+        authorSearchField  .textProperty() .addListener((o, p, n) -> applyAuthorsFilter());
+        authorCountryFilter.valueProperty().addListener((o, p, n) -> applyAuthorsFilter());
+        authorYearFrom     .textProperty() .addListener((o, p, n) -> applyAuthorsFilter());
+        authorYearTo       .textProperty() .addListener((o, p, n) -> applyAuthorsFilter());
     }
 
     /**
@@ -375,12 +390,12 @@ public class MainController {
      * Updates {@link #authorsData} and the status bar with the result count.
      */
     private void applyAuthorsFilter() {
-        String  text      = authorSearchField.getText();
-        String  country   = authorCountryFilter.getValue();
-        Integer yearFrom  = parseIntOrZero(authorYearFrom.getText());
-        Integer yearTo    = parseIntOrZero(authorYearTo.getText());
+        String  text    = authorSearchField.getText();
+        String  country = authorCountryFilter.getValue();
+        Integer from    = parseIntOrNull(authorYearFrom.getText());
+        Integer to      = parseIntOrNull(authorYearTo.getText());
 
-        authorsData.setAll(authorDao.search(text, country, yearFrom, yearTo));
+        authorsData.setAll(authorDao.search(text, country, from, to));
         setStatus("Authors: " + authorsData.size() + " record(s) found.");
     }
 
@@ -404,10 +419,14 @@ public class MainController {
     @FXML
     private void onAddAuthor() {
         showAuthorDialog(null).ifPresent(author -> {
-            authorDao.insert(author);
-            refreshAuthorFilters();
-            applyAuthorsFilter();
-            setStatus("Author \"" + author.getFullName() + "\" added.");
+            try {
+                authorDao.insert(author);
+                refreshAuthorFilters();
+                applyAuthorsFilter();
+                setStatus("Author \"" + author.getFullName() + "\" added.");
+            } catch (RuntimeException e) {
+                showAlert(Alert.AlertType.ERROR, "Database error", e.getMessage());
+            }
         });
     }
 
@@ -417,10 +436,14 @@ public class MainController {
         Author selected = authorsTable.getSelectionModel().getSelectedItem();
         if (selected == null) { warn("Select an author to edit."); return; }
         showAuthorDialog(selected).ifPresent(a -> {
-            a.setId(selected.getId());
-            authorDao.update(a);
-            applyAuthorsFilter();
-            setStatus("Author \"" + a.getFullName() + "\" updated.");
+            try {
+                a.setId(selected.getId());
+                authorDao.update(a);
+                applyAuthorsFilter();
+                setStatus("Author \"" + a.getFullName() + "\" updated.");
+            } catch (RuntimeException e) {
+                showAlert(Alert.AlertType.ERROR, "Database error", e.getMessage());
+            }
         });
     }
 
@@ -436,9 +459,13 @@ public class MainController {
         if (selected == null) { warn("Select an author to delete."); return; }
         if (confirm("Delete \"" + selected.getFullName() + "\"?\n" +
                 "Cannot delete if the author has books in the library.")) {
-            authorDao.delete(selected.getId());
-            applyAuthorsFilter();
-            setStatus("Author deleted.");
+            try {
+                authorDao.delete(selected.getId());
+                applyAuthorsFilter();
+                setStatus("Author deleted.");
+            } catch (RuntimeException e) {
+                showAlert(Alert.AlertType.ERROR, "Cannot delete", e.getMessage());
+            }
         }
     }
 
@@ -485,10 +512,10 @@ public class MainController {
         dlg.getDialogPane().setContent(g);
 
         okFilter(dlg, () -> {
-            String e = "";
-            if (nameF.getText().isBlank())   e += "• Name is required.\n";
-            if (!validYear(yearF.getText())) e += "• Year must be 1–4 digits.\n";
-            return e;
+            StringBuilder e = new StringBuilder();
+            if (nameF.getText().isBlank())   e.append("• Name is required.\n");
+            if (!validYear(yearF.getText())) e.append("• Birth year must be 1–4 digits.\n");
+            return e.toString();
         });
 
         dlg.setResultConverter(btn -> {
@@ -527,9 +554,9 @@ public class MainController {
      * reacts immediately to any change.
      */
     private void initReaderFilters() {
-        readerSearchField.textProperty()   .addListener((o, p, n) -> applyReadersFilter());
-        readerRegFrom    .valueProperty()  .addListener((o, p, n) -> applyReadersFilter());
-        readerRegTo      .valueProperty()  .addListener((o, p, n) -> applyReadersFilter());
+        readerSearchField.textProperty() .addListener((o, p, n) -> applyReadersFilter());
+        readerRegFrom    .valueProperty().addListener((o, p, n) -> applyReadersFilter());
+        readerRegTo      .valueProperty().addListener((o, p, n) -> applyReadersFilter());
     }
 
     /**
@@ -537,9 +564,9 @@ public class MainController {
      * Updates {@link #readersData} and the status bar with the result count.
      */
     private void applyReadersFilter() {
-        String    text  = readerSearchField.getText();
-        LocalDate from  = readerRegFrom.getValue();
-        LocalDate to    = readerRegTo.getValue();
+        String    text = readerSearchField.getText();
+        LocalDate from = readerRegFrom.getValue();
+        LocalDate to   = readerRegTo.getValue();
 
         readersData.setAll(readerDao.search(text, from, to));
         setStatus("Readers: " + readersData.size() + " record(s) found.");
@@ -564,9 +591,13 @@ public class MainController {
     @FXML
     private void onAddReader() {
         showReaderDialog(null).ifPresent(reader -> {
-            readerDao.insert(reader);
-            applyReadersFilter();
-            setStatus("Reader \"" + reader.getFullName() + "\" added.");
+            try {
+                readerDao.insert(reader);
+                applyReadersFilter();
+                setStatus("Reader \"" + reader.getFullName() + "\" added.");
+            } catch (RuntimeException e) {
+                showAlert(Alert.AlertType.ERROR, "Database error", e.getMessage());
+            }
         });
     }
 
@@ -576,10 +607,14 @@ public class MainController {
         Reader selected = readersTable.getSelectionModel().getSelectedItem();
         if (selected == null) { warn("Select a reader to edit."); return; }
         showReaderDialog(selected).ifPresent(updated -> {
-            updated.setId(selected.getId());
-            readerDao.update(updated);
-            applyReadersFilter();
-            setStatus("Reader \"" + updated.getFullName() + "\" updated.");
+            try {
+                updated.setId(selected.getId());
+                readerDao.update(updated);
+                applyReadersFilter();
+                setStatus("Reader \"" + updated.getFullName() + "\" updated.");
+            } catch (RuntimeException e) {
+                showAlert(Alert.AlertType.ERROR, "Database error", e.getMessage());
+            }
         });
     }
 
@@ -595,9 +630,13 @@ public class MainController {
         if (selected == null) { warn("Select a reader to delete."); return; }
         if (confirm("Delete \"" + selected.getFullName() + "\"?\n" +
                 "Cannot delete if the reader has active loans.")) {
-            readerDao.delete(selected.getId());
-            applyReadersFilter();
-            setStatus("Reader deleted.");
+            try {
+                readerDao.delete(selected.getId());
+                applyReadersFilter();
+                setStatus("Reader deleted.");
+            } catch (RuntimeException e) {
+                showAlert(Alert.AlertType.ERROR, "Cannot delete", e.getMessage());
+            }
         }
     }
 
@@ -638,10 +677,14 @@ public class MainController {
         dlg.getDialogPane().setContent(g);
 
         okFilter(dlg, () -> {
-            String e = "";
-            if (nameF.getText().isBlank()) e += "• Name is required.\n";
-            if (regPk.getValue() == null)  e += "• Registration date is required.\n";
-            return e;
+            StringBuilder e = new StringBuilder();
+            if (nameF.getText().isBlank())   e.append("• Name is required.\n");
+            if (!emailF.getText().isBlank() && !validEmail(emailF.getText()))
+                e.append("• Email format is invalid (e.g. user@example.com).\n");
+            if (!phoneF.getText().isBlank() && !validPhone(phoneF.getText()))
+                e.append("• Phone must contain 7–15 digits.\n");
+            if (regPk.getValue() == null)    e.append("• Registration date is required.\n");
+            return e.toString();
         });
 
         dlg.setResultConverter(btn -> {
@@ -744,9 +787,13 @@ public class MainController {
     @FXML
     private void onAddLoan() {
         showLoanDialog(null).ifPresent(loan -> {
-            loanDao.insert(loan);
-            applyLoansFilter();
-            setStatus("Loan added.");
+            try {
+                loanDao.insert(loan);
+                applyLoansFilter();
+                setStatus("Loan added.");
+            } catch (RuntimeException e) {
+                showAlert(Alert.AlertType.ERROR, "Database error", e.getMessage());
+            }
         });
     }
 
@@ -756,10 +803,14 @@ public class MainController {
         Loan selected = loansTable.getSelectionModel().getSelectedItem();
         if (selected == null) { warn("Select a loan to edit."); return; }
         showLoanDialog(selected).ifPresent(l -> {
-            l.setId(selected.getId());
-            loanDao.update(l);
-            applyLoansFilter();
-            setStatus("Loan updated.");
+            try {
+                l.setId(selected.getId());
+                loanDao.update(l);
+                applyLoansFilter();
+                setStatus("Loan updated.");
+            } catch (RuntimeException e) {
+                showAlert(Alert.AlertType.ERROR, "Database error", e.getMessage());
+            }
         });
     }
 
@@ -770,9 +821,13 @@ public class MainController {
         if (selected == null) { warn("Select a loan to delete."); return; }
         if (confirm("Delete loan #" + selected.getId() + "?\n\"" +
                 selected.getBookTitle() + "\" → " + selected.getReaderName())) {
-            loanDao.delete(selected.getId());
-            applyLoansFilter();
-            setStatus("Loan deleted.");
+            try {
+                loanDao.delete(selected.getId());
+                applyLoansFilter();
+                setStatus("Loan deleted.");
+            } catch (RuntimeException e) {
+                showAlert(Alert.AlertType.ERROR, "Cannot delete", e.getMessage());
+            }
         }
     }
 
@@ -833,14 +888,14 @@ public class MainController {
         dlg.getDialogPane().setContent(g);
 
         okFilter(dlg, () -> {
-            String e = "";
-            if (bookBox.getValue()   == null) e += "• Book is required.\n";
-            if (readerBox.getValue() == null) e += "• Reader is required.\n";
-            if (duePk.getValue()     == null) e += "• Due date is required.\n";
+            StringBuilder e = new StringBuilder();
+            if (bookBox.getValue()   == null) e.append("• Book is required.\n");
+            if (readerBox.getValue() == null) e.append("• Reader is required.\n");
+            if (duePk.getValue()     == null) e.append("• Due date is required.\n");
             if (loanPk.getValue() != null && duePk.getValue() != null
                     && duePk.getValue().isBefore(loanPk.getValue()))
-                e += "• Due date must be after loan date.\n";
-            return e;
+                e.append("• Due date must be on or after the loan date.\n");
+            return e.toString();
         });
 
         dlg.setResultConverter(btn -> {
@@ -939,8 +994,8 @@ public class MainController {
      */
     private <T> StringConverter<T> strConv(java.util.function.Function<T, String> fn) {
         return new StringConverter<>() {
-            @Override public String toString(T v)       { return fn.apply(v); }
-            @Override public T fromString(String s)     { return null; }
+            @Override public String toString(T v)   { return fn.apply(v); }
+            @Override public T fromString(String s) { return null; }
         };
     }
 
@@ -1029,7 +1084,7 @@ public class MainController {
      * @param v the integer value
      * @return {@code ""} if {@code v == 0}, otherwise {@code String.valueOf(v)}
      */
-    private static String  str(int v)         { return v == 0 ? "" : String.valueOf(v); }
+    private static String str(int v) { return v == 0 ? "" : String.valueOf(v); }
 
     /**
      * Parses a string to int, returning {@code 0} on blank or invalid input.
@@ -1049,7 +1104,7 @@ public class MainController {
      * @param s the string to parse
      * @return the parsed integer, or {@code null}
      */
-    private static Integer parseIntOrZero(String s) {
+    private static Integer parseIntOrNull(String s) {
         if (s == null || s.isBlank()) return null;
         try { return Integer.parseInt(s.trim()); }
         catch (NumberFormatException e) { return null; }
@@ -1062,9 +1117,76 @@ public class MainController {
      * @param s the string value
      * @return trimmed string, or {@code null}
      */
-    private static String coalesce(String s)  { return (s == null || s.isBlank()) ? null : s.trim(); }
+    private static String coalesce(String s) {
+        return (s == null || s.isBlank()) ? null : s.trim();
+    }
 
-    // ── Validators ────────────────────────────────────────────────
-    private static boolean validYear(String s) { return s.isBlank() || s.trim().matches("\\d{1,4}"); }
-    private static boolean validInt (String s) { return s.isBlank() || s.trim().matches("\\d+"); }
+    // ════════════════════════════════════════════════════════════
+    //  Validation helpers
+    // ════════════════════════════════════════════════════════════
+
+    /**
+     * Validates an optional year field.
+     *
+     * @param s the field value; blank is treated as "not provided" (valid)
+     * @return {@code true} if blank or contains 1–4 digits
+     */
+    private static boolean validYear(String s) {
+        return s.isBlank() || s.trim().matches("\\d{1,4}");
+    }
+
+    /**
+     * Validates that a string represents a positive integer (for the Copies field).
+     *
+     * @param s the field value; blank is treated as "not provided" (valid)
+     * @return {@code true} if blank or a string of one or more digits
+     */
+    private static boolean validPositiveInt(String s) {
+        if (s.isBlank()) return true;
+        try { return Integer.parseInt(s.trim()) >= 1; }
+        catch (NumberFormatException e) { return false; }
+    }
+
+    /**
+     * Validates an optional email address using a basic structural pattern.
+     *
+     * <p>Pattern: {@code localPart@domain.tld} where each part contains
+     * word characters, dots, plus signs, or hyphens. Full RFC 5321 compliance
+     * is intentionally not enforced here.
+     *
+     * @param s the email string to validate (must not be blank before calling)
+     * @return {@code true} if the string loosely matches an email format
+     */
+    private static boolean validEmail(String s) {
+        return s.trim().matches("[\\w.+\\-]+@[\\w\\-]+\\.[\\w.]+");
+    }
+
+    /**
+     * Validates an optional phone number.
+     *
+     * <p>Accepts an optional leading {@code +}, followed by 7–15 digits;
+     * spaces, hyphens, and parentheses are stripped before counting digits.
+     *
+     * @param s the phone string to validate (must not be blank before calling)
+     * @return {@code true} if the string contains 7–15 digit characters
+     */
+    private static boolean validPhone(String s) {
+        String digitsOnly = s.replaceAll("[\\s()\\-+]", "");
+        return digitsOnly.matches("\\d{7,15}");
+    }
+
+    /**
+     * Validates an optional ISBN value.
+     *
+     * <p>Accepts ISBN-10 (10 digits) and ISBN-13 (13 digits); hyphens used
+     * as separators are stripped before counting. The check digit is not
+     * mathematically verified.
+     *
+     * @param s the ISBN string to validate (must not be blank before calling)
+     * @return {@code true} if the digit-only form has exactly 10 or 13 characters
+     */
+    private static boolean validIsbn(String s) {
+        String digits = s.replaceAll("[\\-\\s]", "");
+        return digits.matches("\\d{10}") || digits.matches("\\d{13}");
+    }
 }
