@@ -9,9 +9,25 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * JDBC implementation of {@link BookDao}.
+ *
+ * <p>All queries are executed via {@link PreparedStatement} — no string
+ * concatenation is used anywhere in this class.
+ *
+ * <p>The {@link #search} method builds a dynamic WHERE clause at runtime
+ * by appending only the conditions that correspond to non-blank/non-null
+ * filter arguments.
+ *
+ * <p>SQL state {@code 23503} (foreign-key violation) from PostgreSQL is caught
+ * in {@link #delete} and re-thrown as a descriptive {@link RuntimeException}
+ * so the controller layer can display a user-friendly error dialog.
+ */
 public class BookDaoImpl implements BookDao {
 
-    // ── SQL ───────────────────────────────────────────────────────
+    // ── SQL constants ─────────────────────────────────────────────
+
+    /** Base SELECT used by all read methods to avoid repetition. */
     private static final String SELECT_BASE =
             "SELECT b.id, b.title, b.author_id, a.full_name AS author_name, " +
             "       b.genre, b.isbn, b.pub_year, b.copies " +
@@ -20,6 +36,7 @@ public class BookDaoImpl implements BookDao {
     private static final String FIND_ALL   = SELECT_BASE + "ORDER BY b.id";
     private static final String FIND_BY_ID = SELECT_BASE + "WHERE b.id = ?";
 
+    /** Distinct genres for the filter ComboBox. */
     private static final String GENRES =
             "SELECT DISTINCT genre FROM books " +
             "WHERE genre IS NOT NULL ORDER BY genre";
@@ -35,9 +52,26 @@ public class BookDaoImpl implements BookDao {
 
     private static final String DELETE = "DELETE FROM books WHERE id=?";
 
-    // ── Helpers ───────────────────────────────────────────────────
+    /**
+     * PostgreSQL SQL state code for foreign-key violation.
+     * Thrown when trying to delete a book that still has loans.
+     */
+    private static final String FK_VIOLATION = "23503";
+
+    // ── Connection helper ─────────────────────────────────────────
+
+    /** @return the active JDBC connection from the singleton pool */
     private Connection conn() { return DBConnection.getInstance().getConnection(); }
 
+    // ── Row mapper ────────────────────────────────────────────────
+
+    /**
+     * Maps the current row of a {@link ResultSet} to a {@link Book} object.
+     *
+     * @param rs the result set positioned on the row to map
+     * @return a fully populated {@link Book}
+     * @throws SQLException if any column access fails
+     */
     private Book mapRow(ResultSet rs) throws SQLException {
         return new Book(
                 rs.getInt("id"),
@@ -52,6 +86,7 @@ public class BookDaoImpl implements BookDao {
     }
 
     // ── Read ──────────────────────────────────────────────────────
+
     @Override
     public List<Book> findAll() {
         List<Book> list = new ArrayList<>();
@@ -90,11 +125,13 @@ public class BookDaoImpl implements BookDao {
     }
 
     /**
-     * Динамічний пошук. Будуємо WHERE-рядок залежно від заповнених параметрів:
-     *   text     → LIKE в title та author full_name (одночасно OR)
-     *   genre    → точне співпадіння
-     *   yearFrom → pub_year >= yearFrom
-     *   yearTo   → pub_year <= yearTo
+     * Builds and executes a dynamic WHERE clause.
+     *
+     * <p>Only non-blank / non-null arguments contribute a condition.
+     * The year bounds use {@code > 0} as the sentinel for "not provided"
+     * (consistent with the {@code 0 = not set} convention used in the model).
+     *
+     * {@inheritDoc}
      */
     @Override
     public List<Book> search(String text, String genre, Integer yearFrom, Integer yearTo) {
@@ -126,6 +163,7 @@ public class BookDaoImpl implements BookDao {
     }
 
     // ── Write ─────────────────────────────────────────────────────
+
     @Override
     public void insert(Book b) {
         try (PreparedStatement ps = conn().prepareStatement(INSERT)) {
@@ -138,6 +176,7 @@ public class BookDaoImpl implements BookDao {
             ps.executeUpdate();
         } catch (SQLException e) {
             System.err.println("BookDao.insert: " + e.getMessage());
+            throw new RuntimeException("Failed to add book: " + e.getMessage(), e);
         }
     }
 
@@ -154,9 +193,18 @@ public class BookDaoImpl implements BookDao {
             ps.executeUpdate();
         } catch (SQLException e) {
             System.err.println("BookDao.update: " + e.getMessage());
+            throw new RuntimeException("Failed to update book: " + e.getMessage(), e);
         }
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>If the book is referenced by any loan record, PostgreSQL raises
+     * SQL state {@code 23503}. This is caught and re-thrown as a
+     * {@link RuntimeException} with a human-readable message so the
+     * controller can show an error dialog instead of silently failing.
+     */
     @Override
     public void delete(int id) {
         try (PreparedStatement ps = conn().prepareStatement(DELETE)) {
@@ -164,11 +212,27 @@ public class BookDaoImpl implements BookDao {
             ps.executeUpdate();
         } catch (SQLException e) {
             System.err.println("BookDao.delete: " + e.getMessage());
+            if (FK_VIOLATION.equals(e.getSQLState())) {
+                throw new RuntimeException(
+                        "Cannot delete this book — it is referenced by one or more loans.\n" +
+                                "Delete or return all related loans first.", e);
+            }
+            throw new RuntimeException("Failed to delete book: " + e.getMessage(), e);
         }
     }
 
-    // ── Internal ──────────────────────────────────────────────────
-    /** Виконує запит із довільним списком параметрів (String | Integer). */
+    // ── Internal helpers ──────────────────────────────────────────
+
+    /**
+     * Executes a parameterized SELECT and maps all rows to {@link Book} objects.
+     *
+     * <p>Supports parameter types {@link String} and {@link Integer};
+     * other types will be ignored (should not occur in practice).
+     *
+     * @param sql  the fully formed SQL query string
+     * @param args ordered list of bind values
+     * @return list of matched books; never {@code null}
+     */
     private List<Book> query(String sql, List<Object> args) {
         List<Book> list = new ArrayList<>();
         try (PreparedStatement ps = conn().prepareStatement(sql)) {
@@ -186,12 +250,27 @@ public class BookDaoImpl implements BookDao {
         return list;
     }
 
+    /**
+     * Binds a {@link String} parameter or sets it to SQL NULL if blank.
+     *
+     * @param ps the prepared statement
+     * @param i  1-based parameter index
+     * @param v  the string value; {@code null} or blank → SQL NULL
+     */
     private void setNullableString(PreparedStatement ps, int i, String v)
             throws SQLException {
         if (v == null || v.isBlank()) ps.setNull(i, Types.VARCHAR);
         else                          ps.setString(i, v);
     }
 
+    /**
+     * Binds an int parameter or sets it to SQL NULL when the value is {@code 0}
+     * (sentinel for "not set", following the model convention).
+     *
+     * @param ps the prepared statement
+     * @param i  1-based parameter index
+     * @param v  the int value; {@code 0} → SQL NULL
+     */
     private void setNullableInt(PreparedStatement ps, int i, int v)
             throws SQLException {
         if (v == 0) ps.setNull(i, Types.SMALLINT);

@@ -10,9 +10,24 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * JDBC implementation of {@link LoanDao}.
+ *
+ * <p>All queries are executed via {@link PreparedStatement} — no string
+ * concatenation is used anywhere in this class.
+ *
+ * <p>The {@link #search} method applies smart text matching: a numeric
+ * string triggers an exact ID lookup, while a non-numeric string triggers
+ * a LIKE search across the book title and reader name.
+ */
 public class LoanDaoImpl implements LoanDao {
 
-    // ── SQL ───────────────────────────────────────────────────────
+    // ── SQL constants ─────────────────────────────────────────────
+
+    /**
+     * Base SELECT with JOINs to resolve book title and reader name.
+     * Used by all read methods to avoid repetition.
+     */
     private static final String SELECT_BASE =
             "SELECT l.id, l.book_id, b.title AS book_title, " +
             "       l.reader_id, r.full_name AS reader_name, " +
@@ -32,9 +47,20 @@ public class LoanDaoImpl implements LoanDao {
             "WHERE id=?";
     private static final String DELETE = "DELETE FROM loans WHERE id=?";
 
-    // ── Helpers ───────────────────────────────────────────────────
+    // ── Connection helper ─────────────────────────────────────────
+
+    /** @return the active JDBC connection from the singleton pool */
     private Connection conn() { return DBConnection.getInstance().getConnection(); }
 
+    // ── Row mapper ────────────────────────────────────────────────
+
+    /**
+     * Maps the current row of a {@link ResultSet} to a {@link Loan} object.
+     *
+     * @param rs the result set positioned on the row to map
+     * @return a fully populated {@link Loan}
+     * @throws SQLException if any column access fails
+     */
     private Loan mapRow(ResultSet rs) throws SQLException {
         return new Loan(
                 rs.getInt("id"),
@@ -49,6 +75,7 @@ public class LoanDaoImpl implements LoanDao {
     }
 
     // ── Read ──────────────────────────────────────────────────────
+
     @Override
     public List<Loan> findAll() {
         List<Loan> list = new ArrayList<>();
@@ -75,10 +102,13 @@ public class LoanDaoImpl implements LoanDao {
     }
 
     /**
-     * Динамічний пошук:
-     *   text    — число → точний ID; рядок → LIKE в book.title + reader.full_name
-     *   status  — exact match
-     *   dateFrom/dateTo — loan_date діапазон
+     * Builds and executes a dynamic WHERE clause.
+     *
+     * <p>Smart text dispatch: if {@code text} is a valid integer it is treated
+     * as an exact loan ID; otherwise a LIKE search is performed against both the
+     * book title and the reader name.
+     *
+     * {@inheritDoc}
      */
     @Override
     public List<Loan> search(String text, String status,
@@ -89,10 +119,12 @@ public class LoanDaoImpl implements LoanDao {
         if (text != null && !text.isBlank()) {
             String trimmed = text.trim();
             try {
+                // Numeric input → exact ID match
                 int id = Integer.parseInt(trimmed);
                 sql.append("AND l.id = ? ");
                 args.add(id);
             } catch (NumberFormatException ex) {
+                // Non-numeric input → LIKE on title and reader name
                 String p = "%" + trimmed + "%";
                 sql.append("AND (LOWER(b.title) LIKE LOWER(?) " +
                            "     OR LOWER(r.full_name) LIKE LOWER(?)) ");
@@ -117,6 +149,7 @@ public class LoanDaoImpl implements LoanDao {
     }
 
     // ── Write ─────────────────────────────────────────────────────
+
     @Override
     public void insert(Loan l) {
         try (PreparedStatement ps = conn().prepareStatement(INSERT)) {
@@ -128,6 +161,7 @@ public class LoanDaoImpl implements LoanDao {
             ps.executeUpdate();
         } catch (SQLException e) {
             System.err.println("LoanDao.insert: " + e.getMessage());
+            throw new RuntimeException("Failed to add loan: " + e.getMessage(), e);
         }
     }
 
@@ -143,6 +177,7 @@ public class LoanDaoImpl implements LoanDao {
             ps.executeUpdate();
         } catch (SQLException e) {
             System.err.println("LoanDao.update: " + e.getMessage());
+            throw new RuntimeException("Failed to update loan: " + e.getMessage(), e);
         }
     }
 
@@ -153,10 +188,20 @@ public class LoanDaoImpl implements LoanDao {
             ps.executeUpdate();
         } catch (SQLException e) {
             System.err.println("LoanDao.delete: " + e.getMessage());
+            throw new RuntimeException("Failed to delete loan: " + e.getMessage(), e);
         }
     }
 
-    // ── Internal ──────────────────────────────────────────────────
+    // ── Internal helpers ──────────────────────────────────────────
+
+    /**
+     * Executes a parameterized SELECT and maps all rows to {@link Loan} objects.
+     *
+     * @param sql  the fully formed SQL query string
+     * @param args ordered list of bind values ({@link String}, {@link Integer},
+     *             or {@link LocalDate})
+     * @return list of matched loans; never {@code null}
+     */
     private List<Loan> query(String sql, List<Object> args) {
         List<Loan> list = new ArrayList<>();
         try (PreparedStatement ps = conn().prepareStatement(sql)) {
