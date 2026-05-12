@@ -312,7 +312,6 @@ public class MainController {
 
         GridPane g = grid();
         TextField titleF  = field(edit ? existing.getTitle()        : "", "Book title *");
-        TextField genreF  = field(edit ? existing.getGenre()        : "", "Genre");
         TextField isbnF   = field(edit ? existing.getIsbn()         : "", "e.g. 978-0-06-088328-7");
         TextField yearF   = field(edit ? str(existing.getPubYear()) : "", "e.g. 2024");
         TextField copiesF = field(edit ? str(existing.getCopies())  : "1", "≥ 1");
@@ -322,9 +321,17 @@ public class MainController {
                 .filter(a -> a.getId() == existing.getAuthorId())
                 .findFirst().ifPresent(authorBox::setValue);
 
+        ComboBox<String> genreBox = new ComboBox<>();
+        genreBox.setEditable(true);
+        genreBox.getItems().add("");
+        genreBox.getItems().addAll(bookDao.findAllGenres());
+        genreBox.setPrefWidth(220);
+        genreBox.setPromptText("Genre (type or select)");
+        if (edit && existing.getGenre() != null) genreBox.setValue(existing.getGenre());
+
         g.add(label("Title *"),   0, 0); g.add(titleF,   1, 0);
         g.add(label("Author *"),  0, 1); g.add(authorBox, 1, 1);
-        g.add(label("Genre"),     0, 2); g.add(genreF,   1, 2);
+        g.add(label("Genre"),     0, 2); g.add(genreBox,   1, 2);
         g.add(label("ISBN"),      0, 3); g.add(isbnF,    1, 3);
         g.add(label("Pub. year"), 0, 4); g.add(yearF,    1, 4);
         g.add(label("Copies"),    0, 5); g.add(copiesF,  1, 5);
@@ -349,7 +356,8 @@ public class MainController {
             b.setTitle(titleF.getText().trim());
             b.setAuthorId(a.getId());
             b.setAuthorName(a.getFullName());
-            b.setGenre(coalesce(genreF.getText()));
+            String genreVal = genreBox.getValue() != null ? genreBox.getValue() : "";
+            b.setGenre(coalesce(genreVal));
             b.setIsbn(coalesce(isbnF.getText()));
             b.setPubYear(toInt(yearF.getText()));
             b.setCopies(Math.max(1, toInt(copiesF.getText())));
