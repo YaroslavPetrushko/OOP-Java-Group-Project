@@ -31,7 +31,7 @@
                         <Button text="✕ Delete" styleClass="btn-danger"    onAction="#onDeleteBook"/>
                         <Region HBox.hgrow="ALWAYS"/>
                         <TextField fx:id="bookSearchField"
-                                   promptText="Search by title or author…"
+                                   promptText="Search by title, author or ISBN…"
                                    styleClass="search-field"
                                    prefWidth="240"/>
                     </HBox>

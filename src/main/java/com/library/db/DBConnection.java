@@ -81,10 +81,14 @@ public class DBConnection {
      * <p>Callers should <em>not</em> close this connection — it is managed
      * entirely by {@link DBConnection}.
      *
-     * @return the shared JDBC connection, or {@code null} if the connection
+     * @return the shared JDBC connection, or throw exception if the connection
      *         attempt failed
      */
     public Connection getConnection() {
+        if (connection == null) {
+            throw new IllegalStateException(
+                    "Database connection is not available. Check your .env configuration.");
+        }
         return connection;
     }
 }

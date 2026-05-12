@@ -141,13 +141,11 @@ class BookDaoImplTest {
     }
 
     @Test
-    @DisplayName("search text filter binds two LIKE params")
-    void search_textFilter_bindsTwoLikeParams() {
+    @DisplayName("search text filter binds three LIKE params (title, author, isbn)")
+    void search_textFilter_bindsThreeLikeParams() {
         db.emptyRows();
-
         dao.search("Kobzar", null, null, null);
-
-        assertEquals(2, db.lastStatement().countStringsContaining("Kobzar"));
+        assertEquals(3, db.lastStatement().countStringsContaining("Kobzar"));
     }
 
     @Test
@@ -199,7 +197,7 @@ class BookDaoImplTest {
         dao.search("Kobzar", "Poetry", 1800, 1900);
 
         FakeJdbc.StatementCall call = db.lastStatement();
-        assertEquals(2, call.countStringsContaining("Kobzar"));
+        assertEquals(3, call.countStringsContaining("Kobzar"));
         assertTrue(call.hasStringValue("Poetry"));
         assertTrue(call.hasIntValue(1800));
         assertTrue(call.hasIntValue(1900));

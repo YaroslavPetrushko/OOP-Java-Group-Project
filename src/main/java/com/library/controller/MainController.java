@@ -138,12 +138,17 @@ public class MainController {
         initReaderFilters();
         initLoanFilters();
 
+        int overdueCount = loanDao.markOverdue();
+
         applyBooksFilter();
         applyAuthorsFilter();
         applyReadersFilter();
         applyLoansFilter();
 
-        setStatus("Connected ✅  |  Search & filters ready");
+        String initMsg = (overdueCount > 0)
+                ? "Connected ✅  |  " + overdueCount + " loan(s) auto-marked overdue  |  Ready"
+                : "Connected ✅  |  Search & filters ready";
+        setStatus(initMsg);
     }
 
     // ════════════════════════════════════════════════════════════
@@ -237,6 +242,7 @@ public class MainController {
             try {
                 b.setId(selected.getId());
                 bookDao.update(b);
+                refreshBookFilters();
                 applyBooksFilter();
                 setStatus("Book \"" + b.getTitle() + "\" updated.");
             } catch (RuntimeException e) {
@@ -259,6 +265,7 @@ public class MainController {
         if (confirm("Delete \"" + selected.getTitle() + "\"?")) {
             try {
                 bookDao.delete(selected.getId());
+                refreshBookFilters();
                 applyBooksFilter();
                 setStatus("Book deleted.");
             } catch (RuntimeException e) {
@@ -439,6 +446,7 @@ public class MainController {
             try {
                 a.setId(selected.getId());
                 authorDao.update(a);
+                refreshAuthorFilters();
                 applyAuthorsFilter();
                 setStatus("Author \"" + a.getFullName() + "\" updated.");
             } catch (RuntimeException e) {
@@ -461,6 +469,7 @@ public class MainController {
                 "Cannot delete if the author has books in the library.")) {
             try {
                 authorDao.delete(selected.getId());
+                refreshAuthorFilters();
                 applyAuthorsFilter();
                 setStatus("Author deleted.");
             } catch (RuntimeException e) {

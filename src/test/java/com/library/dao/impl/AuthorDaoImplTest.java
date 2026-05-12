@@ -250,10 +250,20 @@ class AuthorDaoImplTest {
     }
 
     @Test
-    @DisplayName("delete SQL exception is swallowed")
-    void delete_sqlException_doesNotThrow() {
-        db.failUpdate(new SQLException("fail"));
+    @DisplayName("delete FK violation throws descriptive RuntimeException")
+    void delete_fkViolation_throwsDescriptiveException() {
+        db.failUpdate(new SQLException("fk violation", "23503"));
 
-        assertDoesNotThrow(() -> dao.delete(1));
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> dao.delete(1));
+        assertTrue(ex.getMessage().contains("Cannot delete this author"));
+    }
+
+    @Test
+    @DisplayName("delete non-FK SQL exception throws generic RuntimeException")
+    void delete_genericSqlException_throwsRuntime() {
+        db.failUpdate(new SQLException("some error", "99999"));
+
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> dao.delete(1));
+        assertTrue(ex.getMessage().contains("Failed to delete author"));
     }
 }
