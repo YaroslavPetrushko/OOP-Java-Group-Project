@@ -113,6 +113,9 @@
                     <doclint>none</doclint>
                     <show>private</show>
                     <nohelp>true</nohelp>
+                    <sourceFileExcludes>
+                        <sourceFileExclude>**/module-info.java</sourceFileExclude>
+                    </sourceFileExcludes>
                 </configuration>
             </plugin>
         </plugins>
