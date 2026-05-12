@@ -32,6 +32,12 @@ public interface BookDao {
     Optional<Book> findById(int id);
 
     /**
+     * Returns all books belonging to the given author.
+     * Used before cascading author delete to build the confirmation message.
+     */
+    List<Book> findByAuthorId(int authorId);
+
+    /**
      * Dynamic multi-field search with optional filters.
      *
      * <ul>

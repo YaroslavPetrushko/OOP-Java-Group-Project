@@ -35,6 +35,8 @@ public class BookDaoImpl implements BookDao {
 
     private static final String FIND_ALL   = SELECT_BASE + "ORDER BY b.id";
     private static final String FIND_BY_ID = SELECT_BASE + "WHERE b.id = ?";
+    private static final String FIND_BY_AUTHOR =
+            SELECT_BASE + "WHERE b.author_id = ? ORDER BY b.title";
 
     /** Distinct genres for the filter ComboBox. */
     private static final String GENRES =
@@ -113,6 +115,20 @@ public class BookDaoImpl implements BookDao {
     }
 
     @Override
+    public List<Book> findByAuthorId(int authorId) {
+        List<Book> list = new ArrayList<>();
+        try (PreparedStatement ps = conn().prepareStatement(FIND_BY_AUTHOR)) {
+            ps.setInt(1, authorId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) list.add(mapRow(rs));
+            }
+        } catch (SQLException e) {
+            System.err.println("BookDao.findByAuthorId: " + e.getMessage());
+        }
+        return list;
+    }
+
+    @Override
     public List<String> findAllGenres() {
         List<String> list = new ArrayList<>();
         try (PreparedStatement ps = conn().prepareStatement(GENRES);
@@ -140,10 +156,10 @@ public class BookDaoImpl implements BookDao {
 
         if (text != null && !text.isBlank()) {
             sql.append("AND (LOWER(b.title) LIKE LOWER(?) " +
-                       "     OR LOWER(a.full_name) LIKE LOWER(?)) ");
+                    "     OR LOWER(a.full_name) LIKE LOWER(?) " +
+                    "     OR LOWER(COALESCE(b.isbn,'')) LIKE LOWER(?)) ");
             String p = "%" + text.trim() + "%";
-            args.add(p);
-            args.add(p);
+			args.add(p); args.add(p); args.add(p);
         }
         if (genre != null && !genre.isBlank()) {
             sql.append("AND b.genre = ? ");

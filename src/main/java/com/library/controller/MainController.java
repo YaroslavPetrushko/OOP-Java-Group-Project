@@ -138,12 +138,17 @@ public class MainController {
         initReaderFilters();
         initLoanFilters();
 
+        int overdueCount = loanDao.markOverdue();
+
         applyBooksFilter();
         applyAuthorsFilter();
         applyReadersFilter();
         applyLoansFilter();
 
-        setStatus("Connected ✅  |  Search & filters ready");
+        String initMsg = (overdueCount > 0)
+                ? "Connected ✅  |  " + overdueCount + " loan(s) auto-marked overdue  |  Ready"
+                : "Connected ✅  |  Search & filters ready";
+        setStatus(initMsg);
     }
 
     // ════════════════════════════════════════════════════════════
@@ -237,6 +242,7 @@ public class MainController {
             try {
                 b.setId(selected.getId());
                 bookDao.update(b);
+                refreshBookFilters();
                 applyBooksFilter();
                 setStatus("Book \"" + b.getTitle() + "\" updated.");
             } catch (RuntimeException e) {
@@ -256,10 +262,22 @@ public class MainController {
     private void onDeleteBook() {
         Book selected = booksTable.getSelectionModel().getSelectedItem();
         if (selected == null) { warn("Select a book to delete."); return; }
-        if (confirm("Delete \"" + selected.getTitle() + "\"?")) {
+
+        int loanCount = loanDao.countByBookId(selected.getId());
+
+        String message = loanCount > 0
+                ? "Delete \"" + selected.getTitle() + "\"?\n\n"
+                  + "⚠  This book has " + loanCount + " loan record(s).\n"
+                  + "All related loans will also be permanently deleted."
+                : "Delete \"" + selected.getTitle() + "\"?";
+
+        if (confirm(message)) {
             try {
+                if (loanCount > 0) loanDao.deleteByBookId(selected.getId());
                 bookDao.delete(selected.getId());
+                refreshBookFilters();
                 applyBooksFilter();
+                applyLoansFilter();
                 setStatus("Book deleted.");
             } catch (RuntimeException e) {
                 showAlert(Alert.AlertType.ERROR, "Cannot delete", e.getMessage());
@@ -305,7 +323,6 @@ public class MainController {
 
         GridPane g = grid();
         TextField titleF  = field(edit ? existing.getTitle()        : "", "Book title *");
-        TextField genreF  = field(edit ? existing.getGenre()        : "", "Genre");
         TextField isbnF   = field(edit ? existing.getIsbn()         : "", "e.g. 978-0-06-088328-7");
         TextField yearF   = field(edit ? str(existing.getPubYear()) : "", "e.g. 2024");
         TextField copiesF = field(edit ? str(existing.getCopies())  : "1", "≥ 1");
@@ -315,9 +332,17 @@ public class MainController {
                 .filter(a -> a.getId() == existing.getAuthorId())
                 .findFirst().ifPresent(authorBox::setValue);
 
+        ComboBox<String> genreBox = new ComboBox<>();
+        genreBox.setEditable(true);
+        genreBox.getItems().add("");
+        genreBox.getItems().addAll(bookDao.findAllGenres());
+        genreBox.setPrefWidth(220);
+        genreBox.setPromptText("Genre (type or select)");
+        if (edit && existing.getGenre() != null) genreBox.setValue(existing.getGenre());
+
         g.add(label("Title *"),   0, 0); g.add(titleF,   1, 0);
         g.add(label("Author *"),  0, 1); g.add(authorBox, 1, 1);
-        g.add(label("Genre"),     0, 2); g.add(genreF,   1, 2);
+        g.add(label("Genre"),     0, 2); g.add(genreBox,   1, 2);
         g.add(label("ISBN"),      0, 3); g.add(isbnF,    1, 3);
         g.add(label("Pub. year"), 0, 4); g.add(yearF,    1, 4);
         g.add(label("Copies"),    0, 5); g.add(copiesF,  1, 5);
@@ -342,7 +367,8 @@ public class MainController {
             b.setTitle(titleF.getText().trim());
             b.setAuthorId(a.getId());
             b.setAuthorName(a.getFullName());
-            b.setGenre(coalesce(genreF.getText()));
+            String genreVal = genreBox.getValue() != null ? genreBox.getValue() : "";
+            b.setGenre(coalesce(genreVal));
             b.setIsbn(coalesce(isbnF.getText()));
             b.setPubYear(toInt(yearF.getText()));
             b.setCopies(Math.max(1, toInt(copiesF.getText())));
@@ -439,6 +465,7 @@ public class MainController {
             try {
                 a.setId(selected.getId());
                 authorDao.update(a);
+                refreshAuthorFilters();
                 applyAuthorsFilter();
                 setStatus("Author \"" + a.getFullName() + "\" updated.");
             } catch (RuntimeException e) {
@@ -457,11 +484,34 @@ public class MainController {
     private void onDeleteAuthor() {
         Author selected = authorsTable.getSelectionModel().getSelectedItem();
         if (selected == null) { warn("Select an author to delete."); return; }
-        if (confirm("Delete \"" + selected.getFullName() + "\"?\n" +
-                "Cannot delete if the author has books in the library.")) {
+
+        List<Book> books = bookDao.findByAuthorId(selected.getId());
+        int totalLoans = books.stream()
+                .mapToInt(b -> loanDao.countByBookId(b.getId()))
+                .sum();
+
+        String message;
+        if (books.isEmpty()) {
+            message = "Delete \"" + selected.getFullName() + "\"?";
+        } else {
+            message = "Delete \"" + selected.getFullName() + "\"?\n\n"
+                    + "⚠  This author has " + books.size() + " book(s)"
+                    + (totalLoans > 0 ? " with " + totalLoans + " loan record(s)" : "")
+                    + ".\nAll related books and loans will also be permanently deleted.";
+        }
+
+        if (confirm(message)) {
             try {
+                for (Book b : books) {
+                    loanDao.deleteByBookId(b.getId());
+                    bookDao.delete(b.getId());
+                }
                 authorDao.delete(selected.getId());
+                refreshAuthorFilters();
+                refreshBookFilters();
                 applyAuthorsFilter();
+                applyBooksFilter();
+                applyLoansFilter();
                 setStatus("Author deleted.");
             } catch (RuntimeException e) {
                 showAlert(Alert.AlertType.ERROR, "Cannot delete", e.getMessage());
@@ -628,11 +678,21 @@ public class MainController {
     private void onDeleteReader() {
         Reader selected = readersTable.getSelectionModel().getSelectedItem();
         if (selected == null) { warn("Select a reader to delete."); return; }
-        if (confirm("Delete \"" + selected.getFullName() + "\"?\n" +
-                "Cannot delete if the reader has active loans.")) {
+
+        int loanCount = loanDao.countByReaderId(selected.getId());
+
+        String message = loanCount > 0
+                ? "Delete \"" + selected.getFullName() + "\"?\n\n"
+                  + "⚠  This reader has " + loanCount + " loan record(s).\n"
+                  + "All related loans will also be permanently deleted."
+                : "Delete \"" + selected.getFullName() + "\"?";
+
+        if (confirm(message)) {
             try {
+                if (loanCount > 0) loanDao.deleteByReaderId(selected.getId());
                 readerDao.delete(selected.getId());
                 applyReadersFilter();
+                applyLoansFilter();
                 setStatus("Reader deleted.");
             } catch (RuntimeException e) {
                 showAlert(Alert.AlertType.ERROR, "Cannot delete", e.getMessage());

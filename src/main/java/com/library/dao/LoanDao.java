@@ -72,4 +72,24 @@ public interface LoanDao {
      * @throws RuntimeException wrapping any unexpected {@link java.sql.SQLException}
      */
     void delete(int id);
+
+    /**
+     * Sets status to {@code "overdue"} for all active loans whose
+     * {@code due_date} is before today. Called once on application startup.
+     *
+     * @return the number of rows updated
+     */
+    int markOverdue();
+
+    /** Counts loans for a given book. Used to build cascade-delete confirmation. */
+    int countByBookId(int bookId);
+
+    /** Counts loans for a given reader. Used to build cascade-delete confirmation. */
+    int countByReaderId(int readerId);
+
+    /** Deletes all loans for the given book. Must be called before deleting the book. */
+    void deleteByBookId(int bookId);
+
+    /** Deletes all loans for the given reader. Must be called before deleting the reader. */
+    void deleteByReaderId(int readerId);
 }

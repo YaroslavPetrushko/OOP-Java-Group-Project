@@ -46,6 +46,14 @@ public class LoanDaoImpl implements LoanDao {
             "UPDATE loans SET book_id=?, reader_id=?, loan_date=?, due_date=?, status=? " +
             "WHERE id=?";
     private static final String DELETE = "DELETE FROM loans WHERE id=?";
+    private static final String MARK_OVERDUE =
+            "UPDATE loans SET status = 'overdue' " +
+                    "WHERE status = 'active' AND due_date < CURRENT_DATE";
+
+    private static final String COUNT_BY_BOOK    = "SELECT COUNT(*) FROM loans WHERE book_id = ?";
+    private static final String COUNT_BY_READER  = "SELECT COUNT(*) FROM loans WHERE reader_id = ?";
+    private static final String DELETE_BY_BOOK   = "DELETE FROM loans WHERE book_id = ?";
+    private static final String DELETE_BY_READER = "DELETE FROM loans WHERE reader_id = ?";
 
     // ── Connection helper ─────────────────────────────────────────
 
@@ -189,6 +197,66 @@ public class LoanDaoImpl implements LoanDao {
         } catch (SQLException e) {
             System.err.println("LoanDao.delete: " + e.getMessage());
             throw new RuntimeException("Failed to delete loan: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public int markOverdue() {
+        try (PreparedStatement ps = conn().prepareStatement(MARK_OVERDUE)) {
+            int count = ps.executeUpdate();
+            if (count > 0) System.out.println("LoanDao.markOverdue: " + count + " loan(s) updated.");
+            return count;
+        } catch (SQLException e) {
+            System.err.println("LoanDao.markOverdue: " + e.getMessage());
+            return 0;
+        }
+    }
+
+    @Override
+    public int countByBookId(int bookId) {
+        try (PreparedStatement ps = conn().prepareStatement(COUNT_BY_BOOK)) {
+            ps.setInt(1, bookId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getInt(1) : 0;
+            }
+        } catch (SQLException e) {
+            System.err.println("LoanDao.countByBookId: " + e.getMessage());
+            return 0;
+        }
+    }
+
+    @Override
+    public int countByReaderId(int readerId) {
+        try (PreparedStatement ps = conn().prepareStatement(COUNT_BY_READER)) {
+            ps.setInt(1, readerId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getInt(1) : 0;
+            }
+        } catch (SQLException e) {
+            System.err.println("LoanDao.countByReaderId: " + e.getMessage());
+            return 0;
+        }
+    }
+
+    @Override
+    public void deleteByBookId(int bookId) {
+        try (PreparedStatement ps = conn().prepareStatement(DELETE_BY_BOOK)) {
+            ps.setInt(1, bookId);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            System.err.println("LoanDao.deleteByBookId: " + e.getMessage());
+            throw new RuntimeException("Failed to delete loans for book: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public void deleteByReaderId(int readerId) {
+        try (PreparedStatement ps = conn().prepareStatement(DELETE_BY_READER)) {
+            ps.setInt(1, readerId);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            System.err.println("LoanDao.deleteByReaderId: " + e.getMessage());
+            throw new RuntimeException("Failed to delete loans for reader: " + e.getMessage(), e);
         }
     }
 
