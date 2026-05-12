@@ -262,11 +262,22 @@ public class MainController {
     private void onDeleteBook() {
         Book selected = booksTable.getSelectionModel().getSelectedItem();
         if (selected == null) { warn("Select a book to delete."); return; }
-        if (confirm("Delete \"" + selected.getTitle() + "\"?")) {
+
+        int loanCount = loanDao.countByBookId(selected.getId());
+
+        String message = loanCount > 0
+                ? "Delete \"" + selected.getTitle() + "\"?\n\n"
+                  + "⚠  This book has " + loanCount + " loan record(s).\n"
+                  + "All related loans will also be permanently deleted."
+                : "Delete \"" + selected.getTitle() + "\"?";
+
+        if (confirm(message)) {
             try {
+                if (loanCount > 0) loanDao.deleteByBookId(selected.getId());
                 bookDao.delete(selected.getId());
                 refreshBookFilters();
                 applyBooksFilter();
+                applyLoansFilter();
                 setStatus("Book deleted.");
             } catch (RuntimeException e) {
                 showAlert(Alert.AlertType.ERROR, "Cannot delete", e.getMessage());
@@ -473,12 +484,34 @@ public class MainController {
     private void onDeleteAuthor() {
         Author selected = authorsTable.getSelectionModel().getSelectedItem();
         if (selected == null) { warn("Select an author to delete."); return; }
-        if (confirm("Delete \"" + selected.getFullName() + "\"?\n" +
-                "Cannot delete if the author has books in the library.")) {
+
+        List<Book> books = bookDao.findByAuthorId(selected.getId());
+        int totalLoans = books.stream()
+                .mapToInt(b -> loanDao.countByBookId(b.getId()))
+                .sum();
+
+        String message;
+        if (books.isEmpty()) {
+            message = "Delete \"" + selected.getFullName() + "\"?";
+        } else {
+            message = "Delete \"" + selected.getFullName() + "\"?\n\n"
+                    + "⚠  This author has " + books.size() + " book(s)"
+                    + (totalLoans > 0 ? " with " + totalLoans + " loan record(s)" : "")
+                    + ".\nAll related books and loans will also be permanently deleted.";
+        }
+
+        if (confirm(message)) {
             try {
+                for (Book b : books) {
+                    loanDao.deleteByBookId(b.getId());
+                    bookDao.delete(b.getId());
+                }
                 authorDao.delete(selected.getId());
                 refreshAuthorFilters();
+                refreshBookFilters();
                 applyAuthorsFilter();
+                applyBooksFilter();
+                applyLoansFilter();
                 setStatus("Author deleted.");
             } catch (RuntimeException e) {
                 showAlert(Alert.AlertType.ERROR, "Cannot delete", e.getMessage());
@@ -645,11 +678,21 @@ public class MainController {
     private void onDeleteReader() {
         Reader selected = readersTable.getSelectionModel().getSelectedItem();
         if (selected == null) { warn("Select a reader to delete."); return; }
-        if (confirm("Delete \"" + selected.getFullName() + "\"?\n" +
-                "Cannot delete if the reader has active loans.")) {
+
+        int loanCount = loanDao.countByReaderId(selected.getId());
+
+        String message = loanCount > 0
+                ? "Delete \"" + selected.getFullName() + "\"?\n\n"
+                  + "⚠  This reader has " + loanCount + " loan record(s).\n"
+                  + "All related loans will also be permanently deleted."
+                : "Delete \"" + selected.getFullName() + "\"?";
+
+        if (confirm(message)) {
             try {
+                if (loanCount > 0) loanDao.deleteByReaderId(selected.getId());
                 readerDao.delete(selected.getId());
                 applyReadersFilter();
+                applyLoansFilter();
                 setStatus("Reader deleted.");
             } catch (RuntimeException e) {
                 showAlert(Alert.AlertType.ERROR, "Cannot delete", e.getMessage());
