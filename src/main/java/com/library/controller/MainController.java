@@ -164,8 +164,25 @@ public class MainController {
         bookAuthorCol.setCellValueFactory(d -> new SimpleStringProperty(d.getValue().getAuthorName()));
         bookGenreCol .setCellValueFactory(d -> new SimpleStringProperty(d.getValue().getGenre()));
         bookIsbnCol  .setCellValueFactory(d -> new SimpleStringProperty(d.getValue().getIsbn()));
-        bookYearCol  .setCellValueFactory(d -> new SimpleIntegerProperty(d.getValue().getPubYear()).asObject());
         bookCopiesCol.setCellValueFactory(d -> new SimpleIntegerProperty(d.getValue().getCopies()).asObject());
+
+        bookYearCol.setCellValueFactory(d -> new SimpleIntegerProperty(d.getValue().getPubYear()).asObject());
+
+        bookYearCol.setCellFactory(column -> new TableCell<Book, Integer>() {
+            @Override
+            protected void updateItem(Integer year, boolean empty) {
+                super.updateItem(year, empty);
+
+                if (empty || year == null || year == 0) {
+                    setText(null);
+                } else if (year < 0) {
+                    setText(Math.abs(year) + " р. до н.е.");
+                } else {
+                    setText(String.valueOf(year));
+                }
+            }
+        });
+
         booksTable.setItems(booksData);
     }
 
@@ -354,7 +371,7 @@ public class MainController {
             if (authorBox.getValue() == null) e.append("• Author is required.\n");
             if (!isbnF.getText().isBlank() && !validIsbn(isbnF.getText()))
                 e.append("• ISBN must be 10 or 13 digits (hyphens allowed).\n");
-            if (!validYear(yearF.getText()))  e.append("• Publication year must be 1–4 digits.\n");
+            if (!validYear(yearF.getText()))  e.append("• Publication year must be 1–4 digits and in range (-4000 - current year).\n");
             if (!validPositiveInt(copiesF.getText()))
                 e.append("• Copies must be a positive integer (≥ 1).\n");
             return e.toString();
@@ -388,7 +405,24 @@ public class MainController {
         authorIdCol       .setCellValueFactory(d -> new SimpleIntegerProperty(d.getValue().getId()).asObject());
         authorNameCol     .setCellValueFactory(d -> new SimpleStringProperty(d.getValue().getFullName()));
         authorCountryCol  .setCellValueFactory(d -> new SimpleStringProperty(d.getValue().getCountry()));
+
         authorBirthYearCol.setCellValueFactory(d -> new SimpleIntegerProperty(d.getValue().getBirthYear()).asObject());
+
+        authorBirthYearCol.setCellFactory(column -> new TableCell<Author, Integer>() {
+            @Override
+            protected void updateItem(Integer year, boolean empty) {
+                super.updateItem(year, empty);
+
+                if (empty || year == null || year == 0) {
+                    setText(null);
+                } else if (year < 0) {
+                    setText(Math.abs(year) + " р. до н.е.");
+                } else {
+                    setText(String.valueOf(year));
+                }
+            }
+        });
+
         authorsTable.setItems(authorsData);
     }
 
@@ -564,7 +598,7 @@ public class MainController {
         okFilter(dlg, () -> {
             StringBuilder e = new StringBuilder();
             if (nameF.getText().isBlank())   e.append("• Name is required.\n");
-            if (!validYear(yearF.getText())) e.append("• Birth year must be 1–4 digits.\n");
+            if (!validYear(yearF.getText())) e.append("• Birth year must be 1–4 digits and in range (-4000 - current year).\n");
             return e.toString();
         });
 
@@ -1188,11 +1222,21 @@ public class MainController {
     /**
      * Validates an optional year field.
      *
-     * @param s the field value; blank is treated as "not provided" (valid)
-     * @return {@code true} if blank or contains 1–4 digits
+     * @param s the field value; blank is treated as "not provided" (valid).
+     * @return {@code true} if blank, or contains a valid integer between -4000 and the current year.
      */
     private static boolean validYear(String s) {
-        return s.isBlank() || s.trim().matches("\\d{1,4}");
+        if (s == null || s.isBlank()) {
+            return true; // year is optional (nullable)
+        }
+        try {
+            int year = Integer.parseInt(s.trim());
+            int currentYear = java.time.Year.now().getValue();
+
+            return year >= -4000 && year <= currentYear;
+        } catch (NumberFormatException e) {
+            return false;
+        }
     }
 
     /**
